@@ -25387,14 +25387,19 @@ var init_untagged_resources = __esm({
       severity: RULE_SEVERITY90,
       id: RULE_ID90,
       name: "AWS Resource Untagged",
-      description: "Flag taggable AWS resources that have no user-created tags.",
+      description: "Flag untagged user-created AWS resources, excluding built-in defaults and service-managed resources.",
       message: RULE_MESSAGE90,
       provider: "aws",
       service: RULE_SERVICE90,
       supports: ["discovery"],
       discoveryDependencies: ["aws-resource-explorer-untagged-resources"],
+      getLiveEvaluationCoverage: ({ resources }) => createLiveEvaluationCoverage(
+        resources.get("aws-resource-explorer-untagged-resources"),
+        (resource) => resource.creationOrigin !== "unknown",
+        (resource) => createFindingMatch(resource.arn, resource.region, resource.accountId)
+      ),
       evaluateLive: ({ resources }) => {
-        const findings = resources.get("aws-resource-explorer-untagged-resources").map((resource) => createFindingMatch(resource.arn, resource.region, resource.accountId));
+        const findings = resources.get("aws-resource-explorer-untagged-resources").filter((resource) => resource.creationOrigin !== "unknown").map((resource) => createFindingMatch(resource.arn, resource.region, resource.accountId));
         return createFinding(
           { id: RULE_ID90, service: RULE_SERVICE90, severity: RULE_SEVERITY90, message: RULE_MESSAGE90 },
           "discovery",
@@ -38327,6 +38332,7 @@ __export(client_exports, {
   createS3Client: () => createS3Client,
   createSageMakerClient: () => createSageMakerClient,
   createSecretsManagerClient: () => createSecretsManagerClient,
+  createSsmClient: () => createSsmClient,
   listEnabledAwsRegions: () => listEnabledAwsRegions,
   resolveAwsAccountId: () => resolveAwsAccountId,
   resolveAwsCallerIdentity: () => resolveAwsCallerIdentity,
@@ -38334,7 +38340,7 @@ __export(client_exports, {
   resolveCurrentAwsRegion: () => resolveCurrentAwsRegion,
   withAwsClientCredentials: () => withAwsClientCredentials
 });
-var import_client_application_auto_scaling, import_client_budgets, import_client_cloudfront, import_client_cloudtrail, import_client_cloudwatch, import_client_cloudwatch_logs, import_client_compute_optimizer, import_client_config_service, import_client_cost_explorer, import_client_cost_optimization_hub, import_client_dynamodb, import_client_ec2, import_client_ecr, import_client_ecs, import_client_eks, import_client_elastic_load_balancing, import_client_elastic_load_balancing_v2, import_client_elasticache, import_client_emr, import_client_kms, import_client_lambda, import_client_rds, import_client_redshift, import_client_resource_explorer_2, import_client_route_53, import_client_s3, import_client_sagemaker, import_client_secrets_manager, import_client_sts, AWS_GLOBAL_CONTROL_REGION, AWS_CLIENT_MAX_ATTEMPTS, AWS_ROUTE53_CLIENT_MAX_ATTEMPTS, AWS_CLIENT_CONNECTION_TIMEOUT_MS, AWS_CLIENT_REQUEST_TIMEOUT_MS, baseAwsClientConfig, createEc2Client, createEcsClient, createEksClient, createEcrClient, createApplicationAutoScalingClient, createBudgetsClient, createElastiCacheClient, createElasticLoadBalancingClient, createElasticLoadBalancingV2Client, createCloudWatchClient, createCloudTrailClient, createCloudFrontClient, createCloudWatchLogsClient, createComputeOptimizerClient, createConfigServiceClient, createCostExplorerClient, createCostOptimizationHubClient, createDynamoDbClient, createLambdaClient, createKmsClient, createEmrClient, createRdsClient, createRedshiftClient, createRoute53Client, createS3Client, createSageMakerClient, createSecretsManagerClient, createResourceExplorerClient, resolveCurrentAwsRegion, resolveAwsAccountId, resolveAwsCallerIdentity, resolveAwsEvidenceCredentials, listEnabledAwsRegions;
+var import_client_application_auto_scaling, import_client_budgets, import_client_cloudfront, import_client_cloudtrail, import_client_cloudwatch, import_client_cloudwatch_logs, import_client_compute_optimizer, import_client_config_service, import_client_cost_explorer, import_client_cost_optimization_hub, import_client_dynamodb, import_client_ec2, import_client_ecr, import_client_ecs, import_client_eks, import_client_elastic_load_balancing, import_client_elastic_load_balancing_v2, import_client_elasticache, import_client_emr, import_client_kms, import_client_lambda, import_client_rds, import_client_redshift, import_client_resource_explorer_2, import_client_route_53, import_client_s3, import_client_sagemaker, import_client_secrets_manager, import_client_ssm, import_client_sts, AWS_GLOBAL_CONTROL_REGION, AWS_CLIENT_MAX_ATTEMPTS, AWS_ROUTE53_CLIENT_MAX_ATTEMPTS, AWS_CLIENT_CONNECTION_TIMEOUT_MS, AWS_CLIENT_REQUEST_TIMEOUT_MS, baseAwsClientConfig, createEc2Client, createEcsClient, createEksClient, createEcrClient, createApplicationAutoScalingClient, createBudgetsClient, createElastiCacheClient, createElasticLoadBalancingClient, createElasticLoadBalancingV2Client, createCloudWatchClient, createCloudTrailClient, createCloudFrontClient, createCloudWatchLogsClient, createComputeOptimizerClient, createConfigServiceClient, createCostExplorerClient, createCostOptimizationHubClient, createDynamoDbClient, createLambdaClient, createKmsClient, createSsmClient, createEmrClient, createRdsClient, createRedshiftClient, createRoute53Client, createS3Client, createSageMakerClient, createSecretsManagerClient, createResourceExplorerClient, resolveCurrentAwsRegion, resolveAwsAccountId, resolveAwsCallerIdentity, resolveAwsEvidenceCredentials, listEnabledAwsRegions;
 var init_client = __esm({
   "../sdk/src/providers/aws/client.ts"() {
     "use strict";
@@ -38366,6 +38372,7 @@ var init_client = __esm({
     import_client_s3 = require("@aws-sdk/client-s3");
     import_client_sagemaker = require("@aws-sdk/client-sagemaker");
     import_client_secrets_manager = require("@aws-sdk/client-secrets-manager");
+    import_client_ssm = require("@aws-sdk/client-ssm");
     import_client_sts = require("@aws-sdk/client-sts");
     init_credentials();
     init_execution();
@@ -38546,6 +38553,10 @@ var init_client = __esm({
         region: config.region,
         credentials: resolveAwsClientCredentials()
       })
+    );
+    createSsmClient = (config) => getAwsClient(
+      JSON.stringify(["SSMClient", config.region]),
+      () => new import_client_ssm.SSMClient({ ...baseAwsClientConfig(), region: config.region, credentials: resolveAwsClientCredentials() })
     );
     createEmrClient = (config) => getAwsClient(
       JSON.stringify(["EMRClient", config.region]),
@@ -45923,33 +45934,301 @@ var init_secretsmanager2 = __esm({
 });
 
 // ../sdk/src/providers/aws/resources/tagging.ts
-var UNTAGGED_RESOURCES_FILTER, hydrateAwsUntaggedResources;
+var import_client_ec29, import_client_kms3, import_client_ssm2, UNTAGGED_RESOURCES_FILTER, EC2_RESOURCE_NOT_FOUND_CODES, INSPECTOR_ASSOCIATION_NAMES, defaultOrigin, loadEc2ResourceOrigins, loadResourceOrigins, isAwsDefaultResource, hydrateAwsUntaggedResources;
 var init_tagging2 = __esm({
   "../sdk/src/providers/aws/resources/tagging.ts"() {
     "use strict";
+    import_client_ec29 = require("@aws-sdk/client-ec2");
+    import_client_kms3 = require("@aws-sdk/client-kms");
+    import_client_ssm2 = require("@aws-sdk/client-ssm");
+    init_client();
+    init_errors();
+    init_utils();
     UNTAGGED_RESOURCES_FILTER = "resourcetype.supports:tags tag:none";
+    EC2_RESOURCE_NOT_FOUND_CODES = /* @__PURE__ */ new Set([
+      "InvalidVpcID.NotFound",
+      "InvalidSubnetID.NotFound",
+      "InvalidGroup.NotFound",
+      "InvalidNetworkAclID.NotFound",
+      "InvalidSecurityGroupRuleId.NotFound",
+      "InvalidDhcpOptionID.NotFound"
+    ]);
+    INSPECTOR_ASSOCIATION_NAMES = /* @__PURE__ */ new Set([
+      "InspectorInventoryCollection-do-not-delete",
+      "InspectorDistributor-do-not-delete",
+      "InvokeInspectorSsmPlugin-do-not-delete",
+      "InspectorLinuxDistributor-do-not-delete",
+      "InvokeInspectorLinuxSsmPlugin-do-not-delete"
+    ]);
+    defaultOrigin = (isDefault) => isDefault === true ? "aws" : isDefault === false ? "user" : "unknown";
+    loadEc2ResourceOrigins = async (resources, region, origins) => {
+      const client = createEc2Client({ region });
+      const groupNames = /* @__PURE__ */ new Map();
+      const describeGroups = async (ids, nextToken) => {
+        const response = await runAwsRequest(
+          "Amazon EC2",
+          "DescribeSecurityGroups",
+          region,
+          () => client.send(new import_client_ec29.DescribeSecurityGroupsCommand({ GroupIds: ids, NextToken: nextToken }))
+        );
+        for (const group of response.SecurityGroups ?? []) {
+          if (group.GroupId && group.GroupName) groupNames.set(group.GroupId, group.GroupName);
+        }
+        return response;
+      };
+      const load = async (type, fetchPage) => {
+        const candidates = resources.filter((resource) => resource.resourceType === type);
+        for (const candidate of candidates) origins.set(candidate.arn, "unknown");
+        for (const batch of chunkItems(candidates, 100)) {
+          const arns = new Map(batch.map((resource) => [resource.arn.split("/").at(-1), resource.arn]));
+          const loadBatch = async (ids) => {
+            let nextToken;
+            try {
+              do {
+                const page = await fetchPage(ids, nextToken);
+                for (const resource of page.resources) {
+                  const arn = resource.id ? arns.get(resource.id) : void 0;
+                  if (arn) origins.set(arn, resource.origin);
+                }
+                nextToken = page.nextToken;
+              } while (nextToken);
+            } catch (error2) {
+              if (isAwsAccessDeniedError(error2)) return;
+              if (!EC2_RESOURCE_NOT_FOUND_CODES.has(getAwsErrorCode(error2) ?? "")) throw error2;
+              if (ids.length > 1) {
+                const middle = Math.ceil(ids.length / 2);
+                await loadBatch(ids.slice(0, middle));
+                await loadBatch(ids.slice(middle));
+              }
+            }
+          };
+          await loadBatch([...arns.keys()]);
+        }
+      };
+      for (const resource of resources) {
+        if (resource.resourceType === "ec2:route-table" || resource.resourceType === "ec2:internet-gateway")
+          origins.set(resource.arn, "unknown");
+      }
+      await load("ec2:vpc", async (ids, NextToken) => {
+        const response = await runAwsRequest(
+          "Amazon EC2",
+          "DescribeVpcs",
+          region,
+          () => client.send(new import_client_ec29.DescribeVpcsCommand({ VpcIds: ids, NextToken }))
+        );
+        return {
+          resources: (response.Vpcs ?? []).map((vpc) => ({ id: vpc.VpcId, origin: defaultOrigin(vpc.IsDefault) })),
+          nextToken: response.NextToken
+        };
+      });
+      await load("ec2:dhcp-options", async (ids, NextToken) => {
+        const response = await runAwsRequest(
+          "Amazon EC2",
+          "DescribeDhcpOptions",
+          region,
+          () => client.send(new import_client_ec29.DescribeDhcpOptionsCommand({ DhcpOptionsIds: ids, NextToken }))
+        );
+        return {
+          resources: (response.DhcpOptions ?? []).map((options) => {
+            const domain = region === "us-east-1" ? "ec2.internal" : `${region}.compute.internal`;
+            const custom = options.DhcpConfigurations?.some(
+              (option) => option.Key !== "domain-name" && option.Key !== "domain-name-servers" || option.Values?.some(
+                (value) => value.Value !== (option.Key === "domain-name" ? domain : "AmazonProvidedDNS")
+              )
+            );
+            return { id: options.DhcpOptionsId, origin: custom ? "user" : "unknown" };
+          }),
+          nextToken: response.NextToken
+        };
+      });
+      await load("ec2:subnet", async (ids, NextToken) => {
+        const response = await runAwsRequest(
+          "Amazon EC2",
+          "DescribeSubnets",
+          region,
+          () => client.send(new import_client_ec29.DescribeSubnetsCommand({ SubnetIds: ids, NextToken }))
+        );
+        return {
+          resources: (response.Subnets ?? []).map((subnet) => ({
+            id: subnet.SubnetId,
+            origin: defaultOrigin(subnet.DefaultForAz)
+          })),
+          nextToken: response.NextToken
+        };
+      });
+      await load("ec2:network-acl", async (ids, NextToken) => {
+        const response = await runAwsRequest(
+          "Amazon EC2",
+          "DescribeNetworkAcls",
+          region,
+          () => client.send(new import_client_ec29.DescribeNetworkAclsCommand({ NetworkAclIds: ids, NextToken }))
+        );
+        return {
+          resources: (response.NetworkAcls ?? []).map((acl) => ({
+            id: acl.NetworkAclId,
+            origin: defaultOrigin(acl.IsDefault)
+          })),
+          nextToken: response.NextToken
+        };
+      });
+      await load("ec2:security-group", async (ids, NextToken) => {
+        const response = await describeGroups(ids, NextToken);
+        return {
+          resources: (response.SecurityGroups ?? []).map((group) => ({
+            id: group.GroupId,
+            origin: group.GroupName ? defaultOrigin(group.GroupName === "default") : "unknown"
+          })),
+          nextToken: response.NextToken
+        };
+      });
+      await load("ec2:security-group-rule", async (ids, NextToken) => {
+        const response = await runAwsRequest(
+          "Amazon EC2",
+          "DescribeSecurityGroupRules",
+          region,
+          () => client.send(new import_client_ec29.DescribeSecurityGroupRulesCommand({ SecurityGroupRuleIds: ids, NextToken }))
+        );
+        const missingGroups = [
+          ...new Set(
+            (response.SecurityGroupRules ?? []).flatMap(
+              (rule) => rule.GroupId && !groupNames.has(rule.GroupId) ? [rule.GroupId] : []
+            )
+          )
+        ];
+        for (const batch of chunkItems(missingGroups, 100)) {
+          let nextToken;
+          do {
+            const page = await describeGroups(batch, nextToken);
+            nextToken = page.NextToken;
+          } while (nextToken);
+        }
+        return {
+          resources: (response.SecurityGroupRules ?? []).map((rule) => ({
+            id: rule.SecurityGroupRuleId,
+            // Rules on a default group may be AWS-provided or customer-added.
+            origin: rule.GroupId && groupNames.has(rule.GroupId) && groupNames.get(rule.GroupId) !== "default" ? "user" : "unknown"
+          })),
+          nextToken: response.NextToken
+        };
+      });
+    };
+    loadResourceOrigins = async (resources) => {
+      const origins = /* @__PURE__ */ new Map();
+      const metadataResources = resources.filter(
+        (resource) => resource.service === "ec2" || resource.resourceType === "kms:key" || resource.resourceType === "ssm:association"
+      );
+      const regions = [...new Set(metadataResources.map((resource) => resource.region))];
+      await mapWithConcurrency(regions, 5, async (region) => {
+        const regionalResources = metadataResources.filter((resource) => resource.region === region);
+        await loadEc2ResourceOrigins(regionalResources, region, origins);
+        await mapWithConcurrency(
+          regionalResources.filter(
+            (resource) => resource.resourceType === "kms:key" || resource.resourceType === "ssm:association"
+          ),
+          10,
+          async (resource) => {
+            origins.set(resource.arn, "unknown");
+            try {
+              if (resource.resourceType === "kms:key") {
+                const response = await runAwsRequest(
+                  "AWS KMS",
+                  "DescribeKey",
+                  region,
+                  () => createKmsClient({ region }).send(new import_client_kms3.DescribeKeyCommand({ KeyId: resource.arn }))
+                );
+                const manager = response.KeyMetadata?.KeyManager;
+                if (manager === "AWS" || manager === "CUSTOMER")
+                  origins.set(resource.arn, manager === "AWS" ? "aws" : "user");
+              } else {
+                const associationId = resource.arn.split("/").at(-1);
+                const response = await runAwsRequest(
+                  "AWS Systems Manager",
+                  "DescribeAssociation",
+                  region,
+                  () => createSsmClient({ region }).send(new import_client_ssm2.DescribeAssociationCommand({ AssociationId: associationId }))
+                );
+                const description = response.AssociationDescription;
+                if (description?.AssociationId === associationId && description?.Name) {
+                  const inspectorDocument = description.Name.startsWith("AmazonInspector2-") || description.Name === "AWS-GatherSoftwareInventory";
+                  origins.set(
+                    resource.arn,
+                    inspectorDocument && INSPECTOR_ASSOCIATION_NAMES.has(description.AssociationName ?? "") ? "aws" : "user"
+                  );
+                }
+              }
+            } catch (error2) {
+              const missingCode = resource.resourceType === "kms:key" ? "NotFoundException" : "AssociationDoesNotExist";
+              if (!isAwsAccessDeniedError(error2) && getAwsErrorCode(error2) !== missingCode) throw error2;
+            }
+          }
+        );
+      });
+      return origins;
+    };
+    isAwsDefaultResource = (resource) => {
+      const resourceId = resource.arn.split(":").slice(5).join(":");
+      switch (resource.resourceType) {
+        case "access-analyzer:analyzer":
+          return resourceId.startsWith("analyzer/_AccessAnalyzerForSecurityHubV2-");
+        case "apprunner:autoscalingconfiguration":
+          return resourceId === "autoscalingconfiguration/DefaultConfiguration/1/00000000000000000000000000000001";
+        case "athena:datacatalog":
+          return resourceId === "datacatalog/AwsDataCatalog";
+        case "athena:workgroup":
+          return resourceId === "workgroup/primary";
+        case "config:config-rule":
+          return resourceId.startsWith("config-rule/aws-service-rule/");
+        case "elasticache:user":
+          return resourceId === "user:default";
+        case "events:event-bus":
+          return resourceId === "event-bus/default";
+        case "events:rule":
+          return /^rule\/DO-NOT-DELETE-AmazonInspector\w*ManagedRule$/u.test(resourceId);
+        case "iam:role":
+          return resourceId.startsWith("role/aws-service-role/") || resourceId.startsWith("role/aws-reserved/sso.amazonaws.com/");
+        case "iam:saml-provider":
+          return /^saml-provider\/AWSSSO_\w+_DO_NOT_DELETE$/u.test(resourceId);
+        case "memorydb:acl":
+          return resourceId === "acl/open-access";
+        case "memorydb:parametergroup":
+          return resourceId.startsWith("parametergroup/default.memorydb-");
+        case "memorydb:user":
+          return resourceId === "user/default";
+        case "s3:storage-lens":
+          return resourceId === "storage-lens/default-account-dashboard";
+        case "ssm:parameter":
+          return resourceId === "parameter/inspector-aws/service/inspector-linux-application-paths";
+        case "xray:sampling-rule":
+          return resourceId === "sampling-rule/Default";
+        default:
+          return false;
+      }
+    };
     hydrateAwsUntaggedResources = async (_resources, context6) => {
       const resources = await context6.listResourcesByFilter(UNTAGGED_RESOURCES_FILTER, {
         requiredViewProperties: ["tags"],
         scope: "account"
       });
-      return resources.map((resource) => ({
+      const candidates = resources.filter((resource) => !isAwsDefaultResource(resource));
+      const origins = await loadResourceOrigins(candidates);
+      return candidates.filter((resource) => origins.get(resource.arn) !== "aws").map((resource) => ({
         accountId: resource.accountId,
         arn: resource.arn,
         region: resource.region,
         resourceType: resource.resourceType,
-        service: resource.service
+        service: resource.service,
+        ...origins.get(resource.arn) === "unknown" ? { creationOrigin: "unknown" } : {}
       }));
     };
   }
 });
 
 // ../sdk/src/providers/aws/resources/vpc-endpoints.ts
-var import_client_ec29, VPC_ENDPOINT_ARN_PREFIX, VPC_ENDPOINT_DESCRIBE_BATCH_SIZE, VPC_ENDPOINT_DESCRIBE_CONCURRENCY, THIRTY_DAYS_IN_SECONDS4, DAILY_PERIOD_IN_SECONDS10, REQUIRED_VPC_ENDPOINT_DAILY_POINTS, isVpcEndpointMissingError, describeVpcEndpointBatch, extractVpcEndpointId, hydrateAwsEc2VpcEndpointActivity;
+var import_client_ec210, VPC_ENDPOINT_ARN_PREFIX, VPC_ENDPOINT_DESCRIBE_BATCH_SIZE, VPC_ENDPOINT_DESCRIBE_CONCURRENCY, THIRTY_DAYS_IN_SECONDS4, DAILY_PERIOD_IN_SECONDS10, REQUIRED_VPC_ENDPOINT_DAILY_POINTS, isVpcEndpointMissingError, describeVpcEndpointBatch, extractVpcEndpointId, hydrateAwsEc2VpcEndpointActivity;
 var init_vpc_endpoints = __esm({
   "../sdk/src/providers/aws/resources/vpc-endpoints.ts"() {
     "use strict";
-    import_client_ec29 = require("@aws-sdk/client-ec2");
+    import_client_ec210 = require("@aws-sdk/client-ec2");
     init_client();
     init_execution();
     init_cloudwatch2();
@@ -45979,7 +46258,7 @@ var init_vpc_endpoints = __esm({
           "DescribeVpcEndpoints",
           region,
           () => client.send(
-            new import_client_ec29.DescribeVpcEndpointsCommand({
+            new import_client_ec210.DescribeVpcEndpointsCommand({
               VpcEndpointIds: batch.map(({ vpcEndpointId }) => vpcEndpointId)
             })
           ),
@@ -47088,8 +47367,8 @@ var init_discovery_registry = __esm({
         catalogQueries: [
           { filterString: "resourcetype.supports:tags tag:none", requiredViewProperties: ["tags"], scope: "account" }
         ],
-        schemaVersion: "1",
-        loaderVersion: "1",
+        schemaVersion: "2",
+        loaderVersion: "2",
         freshness: { ttlMs: 6e5, observation: { kind: "current" } },
         resourceTypes: [],
         service: "tagging",
@@ -47097,7 +47376,11 @@ var init_discovery_registry = __esm({
         toEvaluationResources: (resources) => mapEvaluationResources(
           resources,
           (resource) => resource.arn,
-          (resource) => ({ arn: resource.arn, resourceType: resource.resourceType })
+          (resource) => ({
+            arn: resource.arn,
+            resourceType: resource.resourceType,
+            ...resource.creationOrigin ? { data: { creationOrigin: resource.creationOrigin } } : {}
+          })
         )
       },
       "aws-secretsmanager-secrets": {
@@ -56496,9 +56779,9 @@ var getInputs = () => {
 };
 
 // src/version.ts
-var ACTION_VERSION = "1.0.1";
-var SDK_VERSION = "0.37.1";
-var RULES_VERSION = "0.34.1";
+var ACTION_VERSION = "1.0.2";
+var SDK_VERSION = "0.37.2";
+var RULES_VERSION = "0.34.2";
 
 // src/markdown.ts
 var escapeCell = (value) => value.replace(/\\/g, "\\\\").replace(/[[\]<>|]/g, "\\$&").replace(/\r\n?|\n/g, " ");
