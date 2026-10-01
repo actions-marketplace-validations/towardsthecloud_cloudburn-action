@@ -45788,13 +45788,10 @@ var init_savings_plans_coverage2 = __esm({
             "GetSavingsPlansCoverage",
             COST_EXPLORER_CONTROL_REGION2,
             () => client.send(
+              // Cost Explorer answers a query filtered to a service without eligible usage with
+              // DataUnavailableException, so coverage is grouped by service and an absent SageMaker group means no usage.
               new import_client_cost_explorer4.GetSavingsPlansCoverageCommand({
-                Filter: {
-                  Dimensions: {
-                    Key: "SERVICE",
-                    Values: [SAGEMAKER_SERVICE_NAME]
-                  }
-                },
+                GroupBy: [{ Key: "SERVICE", Type: "DIMENSION" }],
                 MaxResults: PAGE_SIZE3,
                 Metrics: ["SpendCoveredBySavingsPlans"],
                 NextToken: nextToken,
@@ -45806,7 +45803,9 @@ var init_savings_plans_coverage2 = __esm({
             )
           );
           for (const coverage2 of response.SavingsPlansCoverages ?? []) {
-            const normalized = normalizeCoverage(accountId, coverage2);
+            const service3 = coverage2.Attributes?.SERVICE;
+            if (service3 && service3 !== SAGEMAKER_SERVICE_NAME) continue;
+            const normalized = service3 ? normalizeCoverage(accountId, coverage2) : null;
             if (normalized) {
               coverageByPeriod.set(`${normalized.periodStart}:${normalized.periodEnd}`, normalized);
             } else {
@@ -45823,7 +45822,7 @@ var init_savings_plans_coverage2 = __esm({
             diagnostics: [
               {
                 code: "SavingsPlansCoverageIncomplete",
-                details: `${incompleteCoverageCount} SageMaker Savings Plans coverage record${incompleteCoverageCount === 1 ? "" : "s"} lacked a complete time period or numeric coverage and cost values.`,
+                details: `${incompleteCoverageCount} Savings Plans coverage record${incompleteCoverageCount === 1 ? "" : "s"} lacked a service, a complete time period, or numeric coverage and cost values.`,
                 message: "Skipped SageMaker Savings Plans coverage because AWS Cost Explorer returned incomplete coverage evidence.",
                 provider: "aws",
                 service: "sagemaker",
@@ -47344,7 +47343,7 @@ var init_discovery_registry = __esm({
         datasetKey: "aws-sagemaker-savings-plans-coverage",
         dependencies: [],
         schemaVersion: "1",
-        loaderVersion: "1",
+        loaderVersion: "2",
         freshness: {
           ttlMs: 216e5,
           observation: { kind: "window", lookbackMs: 30 * 864e5, alignmentMs: 864e5 }
@@ -56779,8 +56778,8 @@ var getInputs = () => {
 };
 
 // src/version.ts
-var ACTION_VERSION = "1.0.2";
-var SDK_VERSION = "0.37.2";
+var ACTION_VERSION = "1.0.3";
+var SDK_VERSION = "0.37.3";
 var RULES_VERSION = "0.34.2";
 
 // src/markdown.ts
