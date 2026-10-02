@@ -19741,7 +19741,7 @@ var require_lib = __commonJS({
 });
 
 // ../rules/src/shared/helpers.ts
-var createRule, createFindingMatch, createLiveEvaluationCoverage, isRecord, createFinding, toRuleIds, getAwsResourceScopeKey;
+var createRule, createFindingMatch, createLiveEvaluationCoverage, isRecord, createFinding, getAwsResourceScopeKey;
 var init_helpers = __esm({
   "../rules/src/shared/helpers.ts"() {
     "use strict";
@@ -19768,7 +19768,6 @@ var init_helpers = __esm({
       message: rule.message,
       findings
     } : null;
-    toRuleIds = (rules) => rules.map((rule) => rule.id);
     getAwsResourceScopeKey = (accountId, region, resourceId) => JSON.stringify([accountId, region, resourceId]);
   }
 });
@@ -20271,97 +20270,24 @@ var init_finding = __esm({
   }
 });
 
-// ../rules/src/aws/costoptimizationhub/graviton-recommended.ts
-var metadata, costOptimizationHubGravitonRecommendedRule;
-var init_graviton_recommended = __esm({
-  "../rules/src/aws/costoptimizationhub/graviton-recommended.ts"() {
-    "use strict";
-    init_helpers();
-    init_recommendation();
-    init_finding();
-    init_graviton_identity();
-    metadata = {
-      id: "CLDBRN-AWS-COSTOPTIMIZATIONHUB-6",
-      service: "costoptimizationhub",
-      severity: "medium",
-      message: "Review AWS-recommended Graviton migrations, workload compatibility, and rollback requirements."
-    };
-    costOptimizationHubGravitonRecommendedRule = createRule({
-      ...metadata,
-      name: "AWS-Identified Resources Without Graviton",
-      description: "Flag EC2 instances, Auto Scaling groups, and RDS DB instances with AWS Graviton migration recommendations.",
-      provider: "aws",
-      supports: ["discovery"],
-      supersedesRuleIds: ["CLDBRN-AWS-EC2-6", "CLDBRN-AWS-RDS-4"],
-      discoveryDependencies: ["aws-cost-optimization-hub-graviton-recommendations"],
-      evaluateLive: ({ resources }) => createFinding(
-        metadata,
-        "discovery",
-        deduplicateRecommendationMatches(
-          resources.get("aws-cost-optimization-hub-graviton-recommendations").map(createAwsCostOptimizationHubFindingMatch)
-        )
-      )
-    });
-  }
-});
-
-// ../rules/src/aws/costoptimizationhub/idle-capacity.ts
-var RULE_ID2, RULE_SERVICE2, RULE_SEVERITY2, RULE_MESSAGE2, costOptimizationHubIdleCapacityRule;
-var init_idle_capacity = __esm({
-  "../rules/src/aws/costoptimizationhub/idle-capacity.ts"() {
-    "use strict";
-    init_helpers();
-    init_recommendation();
-    init_finding();
-    init_idle_identity();
-    RULE_ID2 = "CLDBRN-AWS-COSTOPTIMIZATIONHUB-3";
-    RULE_SERVICE2 = "costoptimizationhub";
-    RULE_SEVERITY2 = "medium";
-    RULE_MESSAGE2 = "Idle capacity should be reviewed for the exact action recommended by AWS.";
-    costOptimizationHubIdleCapacityRule = createRule({
-      id: RULE_ID2,
-      name: "AWS-Classified Idle Capacity",
-      description: "Flag AWS recommendations to stop, delete, or scale in idle capacity.",
-      message: RULE_MESSAGE2,
-      severity: RULE_SEVERITY2,
-      provider: "aws",
-      service: RULE_SERVICE2,
-      supports: ["discovery"],
-      discoveryDependencies: ["aws-cost-optimization-hub-idle-recommendations"],
-      evaluateLive: ({ resources }) => createFinding(
-        {
-          id: RULE_ID2,
-          service: RULE_SERVICE2,
-          severity: RULE_SEVERITY2,
-          message: RULE_MESSAGE2
-        },
-        "discovery",
-        deduplicateRecommendationMatches(
-          resources.get("aws-cost-optimization-hub-idle-recommendations").map(createAwsCostOptimizationHubFindingMatch)
-        )
-      )
-    });
-  }
-});
-
 // ../rules/src/aws/cloudfront/distribution-pricing-class.ts
-var RULE_ID3, RULE_SERVICE3, RULE_SEVERITY3, RULE_MESSAGE3, cloudFrontDistributionPricingClassRule;
+var RULE_ID2, RULE_SERVICE2, RULE_SEVERITY2, RULE_MESSAGE2, cloudFrontDistributionPricingClassRule;
 var init_distribution_pricing_class = __esm({
   "../rules/src/aws/cloudfront/distribution-pricing-class.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID3 = "CLDBRN-AWS-CLOUDFRONT-1";
-    RULE_SERVICE3 = "cloudfront";
-    RULE_SEVERITY3 = "medium";
-    RULE_MESSAGE3 = "CloudFront distributions using PriceClass_All should be reviewed for cheaper edge coverage.";
+    RULE_ID2 = "CLDBRN-AWS-CLOUDFRONT-1";
+    RULE_SERVICE2 = "cloudfront";
+    RULE_SEVERITY2 = "medium";
+    RULE_MESSAGE2 = "CloudFront distributions using PriceClass_All should be reviewed for cheaper edge coverage.";
     cloudFrontDistributionPricingClassRule = createRule({
-      severity: RULE_SEVERITY3,
-      id: RULE_ID3,
+      severity: RULE_SEVERITY2,
+      id: RULE_ID2,
       name: "CloudFront Distribution Price Class All",
       description: "Flag CloudFront distributions using PriceClass_All when a cheaper price class may suffice.",
-      message: RULE_MESSAGE3,
+      message: RULE_MESSAGE2,
       provider: "aws",
-      service: RULE_SERVICE3,
+      service: RULE_SERVICE2,
       supports: ["discovery", "iac"],
       discoveryDependencies: ["aws-cloudfront-distributions"],
       staticDependencies: ["aws-cloudfront-distributions"],
@@ -20370,7 +20296,7 @@ var init_distribution_pricing_class = __esm({
           (distribution) => createFindingMatch(distribution.distributionArn, distribution.region, distribution.accountId)
         );
         return createFinding(
-          { id: RULE_ID3, service: RULE_SERVICE3, severity: RULE_SEVERITY3, message: RULE_MESSAGE3 },
+          { id: RULE_ID2, service: RULE_SERVICE2, severity: RULE_SEVERITY2, message: RULE_MESSAGE2 },
           "discovery",
           findings
         );
@@ -20378,7 +20304,7 @@ var init_distribution_pricing_class = __esm({
       evaluateStatic: ({ resources }) => {
         const findings = resources.get("aws-cloudfront-distributions").filter((distribution) => distribution.priceClass === "PriceClass_All").map((distribution) => createFindingMatch(distribution.resourceId, void 0, void 0, distribution.location));
         return createFinding(
-          { id: RULE_ID3, service: RULE_SERVICE3, severity: RULE_SEVERITY3, message: RULE_MESSAGE3 },
+          { id: RULE_ID2, service: RULE_SERVICE2, severity: RULE_SEVERITY2, message: RULE_MESSAGE2 },
           "iac",
           findings
         );
@@ -20388,23 +20314,23 @@ var init_distribution_pricing_class = __esm({
 });
 
 // ../rules/src/aws/cloudfront/unused-distribution.ts
-var RULE_ID4, RULE_SERVICE4, RULE_SEVERITY4, RULE_MESSAGE4, cloudFrontUnusedDistributionRule;
+var RULE_ID3, RULE_SERVICE3, RULE_SEVERITY3, RULE_MESSAGE3, cloudFrontUnusedDistributionRule;
 var init_unused_distribution = __esm({
   "../rules/src/aws/cloudfront/unused-distribution.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID4 = "CLDBRN-AWS-CLOUDFRONT-2";
-    RULE_SERVICE4 = "cloudfront";
-    RULE_SEVERITY4 = "medium";
-    RULE_MESSAGE4 = "CloudFront distributions with almost no request traffic should be reviewed for cleanup.";
+    RULE_ID3 = "CLDBRN-AWS-CLOUDFRONT-2";
+    RULE_SERVICE3 = "cloudfront";
+    RULE_SEVERITY3 = "medium";
+    RULE_MESSAGE3 = "CloudFront distributions with almost no request traffic should be reviewed for cleanup.";
     cloudFrontUnusedDistributionRule = createRule({
-      severity: RULE_SEVERITY4,
-      id: RULE_ID4,
+      severity: RULE_SEVERITY3,
+      id: RULE_ID3,
       name: "CloudFront Distribution Unused",
       description: "Flag CloudFront distributions with fewer than 100 requests over the last 30 days.",
-      message: RULE_MESSAGE4,
+      message: RULE_MESSAGE3,
       provider: "aws",
-      service: RULE_SERVICE4,
+      service: RULE_SERVICE3,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cloudfront-distributions", "aws-cloudfront-distribution-request-activity"],
       getLiveEvaluationCoverage: ({ resources }) => {
@@ -20429,7 +20355,7 @@ var init_unused_distribution = __esm({
           (distribution) => createFindingMatch(distribution.distributionArn, distribution.region, distribution.accountId)
         );
         return createFinding(
-          { id: RULE_ID4, service: RULE_SERVICE4, severity: RULE_SEVERITY4, message: RULE_MESSAGE4 },
+          { id: RULE_ID3, service: RULE_SERVICE3, severity: RULE_SEVERITY3, message: RULE_MESSAGE3 },
           "discovery",
           findings
         );
@@ -20450,23 +20376,23 @@ var init_cloudfront = __esm({
 });
 
 // ../rules/src/aws/cloudtrail/redundant-global-trails.ts
-var RULE_ID5, RULE_SERVICE5, RULE_SEVERITY5, RULE_MESSAGE5, cloudTrailRedundantGlobalTrailsRule;
+var RULE_ID4, RULE_SERVICE4, RULE_SEVERITY4, RULE_MESSAGE4, cloudTrailRedundantGlobalTrailsRule;
 var init_redundant_global_trails = __esm({
   "../rules/src/aws/cloudtrail/redundant-global-trails.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID5 = "CLDBRN-AWS-CLOUDTRAIL-1";
-    RULE_SERVICE5 = "cloudtrail";
-    RULE_SEVERITY5 = "medium";
-    RULE_MESSAGE5 = "AWS accounts should keep only one multi-region CloudTrail trail unless redundancy is intentional.";
+    RULE_ID4 = "CLDBRN-AWS-CLOUDTRAIL-1";
+    RULE_SERVICE4 = "cloudtrail";
+    RULE_SEVERITY4 = "medium";
+    RULE_MESSAGE4 = "AWS accounts should keep only one multi-region CloudTrail trail unless redundancy is intentional.";
     cloudTrailRedundantGlobalTrailsRule = createRule({
-      severity: RULE_SEVERITY5,
-      id: RULE_ID5,
+      severity: RULE_SEVERITY4,
+      id: RULE_ID4,
       name: "CloudTrail Redundant Global Trails",
       description: "Flag redundant multi-region CloudTrail trails when more than one trail covers the same account.",
-      message: RULE_MESSAGE5,
+      message: RULE_MESSAGE4,
       provider: "aws",
-      service: RULE_SERVICE5,
+      service: RULE_SERVICE4,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cloudtrail-trails"],
       evaluateLive: ({ resources }) => {
@@ -20487,7 +20413,7 @@ var init_redundant_global_trails = __esm({
         );
         const findings = resources.get("aws-cloudtrail-trails").filter((trail) => trail.isMultiRegionTrail && survivorByAccount.get(trail.accountId) !== trail.trailArn).map((trail) => createFindingMatch(trail.trailArn, trail.region, trail.accountId));
         return createFinding(
-          { id: RULE_ID5, service: RULE_SERVICE5, severity: RULE_SEVERITY5, message: RULE_MESSAGE5 },
+          { id: RULE_ID4, service: RULE_SERVICE4, severity: RULE_SEVERITY4, message: RULE_MESSAGE4 },
           "discovery",
           findings
         );
@@ -20497,23 +20423,23 @@ var init_redundant_global_trails = __esm({
 });
 
 // ../rules/src/aws/cloudtrail/redundant-regional-trails.ts
-var RULE_ID6, RULE_SERVICE6, RULE_SEVERITY6, RULE_MESSAGE6, cloudTrailRedundantRegionalTrailsRule;
+var RULE_ID5, RULE_SERVICE5, RULE_SEVERITY5, RULE_MESSAGE5, cloudTrailRedundantRegionalTrailsRule;
 var init_redundant_regional_trails = __esm({
   "../rules/src/aws/cloudtrail/redundant-regional-trails.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID6 = "CLDBRN-AWS-CLOUDTRAIL-2";
-    RULE_SERVICE6 = "cloudtrail";
-    RULE_SEVERITY6 = "medium";
-    RULE_MESSAGE6 = "AWS regions should keep only one single-region CloudTrail trail unless redundancy is intentional.";
+    RULE_ID5 = "CLDBRN-AWS-CLOUDTRAIL-2";
+    RULE_SERVICE5 = "cloudtrail";
+    RULE_SEVERITY5 = "medium";
+    RULE_MESSAGE5 = "AWS regions should keep only one single-region CloudTrail trail unless redundancy is intentional.";
     cloudTrailRedundantRegionalTrailsRule = createRule({
-      severity: RULE_SEVERITY6,
-      id: RULE_ID6,
+      severity: RULE_SEVERITY5,
+      id: RULE_ID5,
       name: "CloudTrail Redundant Regional Trails",
       description: "Flag redundant single-region CloudTrail trails when more than one trail covers the same region.",
-      message: RULE_MESSAGE6,
+      message: RULE_MESSAGE5,
       provider: "aws",
-      service: RULE_SERVICE6,
+      service: RULE_SERVICE5,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cloudtrail-trails"],
       evaluateLive: ({ resources }) => {
@@ -20537,7 +20463,7 @@ var init_redundant_regional_trails = __esm({
           return survivorByScope.get(`${trail.accountId}:${trail.homeRegion}`) !== trail.trailArn;
         }).map((trail) => createFindingMatch(trail.trailArn, trail.region, trail.accountId));
         return createFinding(
-          { id: RULE_ID6, service: RULE_SERVICE6, severity: RULE_SEVERITY6, message: RULE_MESSAGE6 },
+          { id: RULE_ID5, service: RULE_SERVICE5, severity: RULE_SEVERITY5, message: RULE_MESSAGE5 },
           "discovery",
           findings
         );
@@ -20558,31 +20484,31 @@ var init_cloudtrail = __esm({
 });
 
 // ../rules/src/aws/cloudwatch/log-group-retention.ts
-var RULE_ID7, RULE_SERVICE7, RULE_SEVERITY7, RULE_MESSAGE7, hasMissingRetention, cloudWatchLogGroupRetentionRule;
+var RULE_ID6, RULE_SERVICE6, RULE_SEVERITY6, RULE_MESSAGE6, hasMissingRetention, cloudWatchLogGroupRetentionRule;
 var init_log_group_retention = __esm({
   "../rules/src/aws/cloudwatch/log-group-retention.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID7 = "CLDBRN-AWS-CLOUDWATCH-1";
-    RULE_SERVICE7 = "cloudwatch";
-    RULE_SEVERITY7 = "low";
-    RULE_MESSAGE7 = "CloudWatch log groups should define a retention policy unless AWS manages lifecycle automatically.";
+    RULE_ID6 = "CLDBRN-AWS-CLOUDWATCH-1";
+    RULE_SERVICE6 = "cloudwatch";
+    RULE_SEVERITY6 = "low";
+    RULE_MESSAGE6 = "CloudWatch log groups should define a retention policy unless AWS manages lifecycle automatically.";
     hasMissingRetention = (retentionInDays, logGroupClass) => retentionInDays === void 0 && logGroupClass !== "DELIVERY";
     cloudWatchLogGroupRetentionRule = createRule({
-      severity: RULE_SEVERITY7,
-      id: RULE_ID7,
+      severity: RULE_SEVERITY6,
+      id: RULE_ID6,
       name: "CloudWatch Log Group Missing Retention",
       description: "Flag CloudWatch log groups that do not define retention and are not delivery-managed.",
-      message: RULE_MESSAGE7,
+      message: RULE_MESSAGE6,
       provider: "aws",
-      service: RULE_SERVICE7,
+      service: RULE_SERVICE6,
       supports: ["discovery", "iac"],
       discoveryDependencies: ["aws-cloudwatch-log-groups"],
       staticDependencies: ["aws-cloudwatch-log-groups"],
       evaluateLive: ({ resources }) => {
         const findings = resources.get("aws-cloudwatch-log-groups").filter((logGroup) => hasMissingRetention(logGroup.retentionInDays, logGroup.logGroupClass)).map((logGroup) => createFindingMatch(logGroup.logGroupName, logGroup.region, logGroup.accountId));
         return createFinding(
-          { id: RULE_ID7, service: RULE_SERVICE7, severity: RULE_SEVERITY7, message: RULE_MESSAGE7 },
+          { id: RULE_ID6, service: RULE_SERVICE6, severity: RULE_SEVERITY6, message: RULE_MESSAGE6 },
           "discovery",
           findings
         );
@@ -20590,7 +20516,7 @@ var init_log_group_retention = __esm({
       evaluateStatic: ({ resources }) => {
         const findings = resources.get("aws-cloudwatch-log-groups").filter((logGroup) => hasMissingRetention(logGroup.retentionInDays, logGroup.logGroupClass)).map((logGroup) => createFindingMatch(logGroup.resourceId, void 0, void 0, logGroup.location));
         return createFinding(
-          { id: RULE_ID7, service: RULE_SERVICE7, severity: RULE_SEVERITY7, message: RULE_MESSAGE7 },
+          { id: RULE_ID6, service: RULE_SERVICE6, severity: RULE_SEVERITY6, message: RULE_MESSAGE6 },
           "iac",
           findings
         );
@@ -20600,26 +20526,26 @@ var init_log_group_retention = __esm({
 });
 
 // ../rules/src/aws/cloudwatch/unused-log-streams.ts
-var RULE_ID8, RULE_SERVICE8, RULE_SEVERITY8, RULE_MESSAGE8, DAY_MS, UNUSED_LOG_STREAM_DAYS, toLogGroupScopeKey, cloudWatchUnusedLogStreamsRule;
+var RULE_ID7, RULE_SERVICE7, RULE_SEVERITY7, RULE_MESSAGE7, DAY_MS, UNUSED_LOG_STREAM_DAYS, toLogGroupScopeKey, cloudWatchUnusedLogStreamsRule;
 var init_unused_log_streams = __esm({
   "../rules/src/aws/cloudwatch/unused-log-streams.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID8 = "CLDBRN-AWS-CLOUDWATCH-2";
-    RULE_SERVICE8 = "cloudwatch";
-    RULE_SEVERITY8 = "low";
-    RULE_MESSAGE8 = "CloudWatch log groups whose most recent stream event is older than 90 days should be reviewed or removed.";
+    RULE_ID7 = "CLDBRN-AWS-CLOUDWATCH-2";
+    RULE_SERVICE7 = "cloudwatch";
+    RULE_SEVERITY7 = "low";
+    RULE_MESSAGE7 = "CloudWatch log groups whose most recent stream event is older than 90 days should be reviewed or removed.";
     DAY_MS = 24 * 60 * 60 * 1e3;
     UNUSED_LOG_STREAM_DAYS = 90;
     toLogGroupScopeKey = (region, accountId, logGroupName) => `${region}:${accountId}:${logGroupName}`;
     cloudWatchUnusedLogStreamsRule = createRule({
-      severity: RULE_SEVERITY8,
-      id: RULE_ID8,
+      severity: RULE_SEVERITY7,
+      id: RULE_ID7,
       name: "CloudWatch Log Group Inactive",
       description: "Flag CloudWatch log groups whose most recent stream has no observed event history or whose latest stream event is more than 90 days old outside delivery-managed log groups.",
-      message: RULE_MESSAGE8,
+      message: RULE_MESSAGE7,
       provider: "aws",
-      service: RULE_SERVICE8,
+      service: RULE_SERVICE7,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cloudwatch-log-groups", "aws-cloudwatch-log-group-recent-stream-activity"],
       evaluateLive: ({ resources }) => {
@@ -20644,7 +20570,7 @@ var init_unused_log_streams = __esm({
           return logGroupsByScopeKey.has(logGroupScopeKey) && !deliveryManagedLogGroups.has(logGroupScopeKey) && (latestEventTimestamp === void 0 || latestEventTimestamp < cutoff);
         }).map((logGroup) => createFindingMatch(logGroup.logGroupArn, logGroup.region, logGroup.accountId));
         return createFinding(
-          { id: RULE_ID8, service: RULE_SERVICE8, severity: RULE_SEVERITY8, message: RULE_MESSAGE8 },
+          { id: RULE_ID7, service: RULE_SERVICE7, severity: RULE_SEVERITY7, message: RULE_MESSAGE7 },
           "discovery",
           findings
         );
@@ -20675,30 +20601,30 @@ var init_config = __esm({
 });
 
 // ../rules/src/aws/costexplorer/full-month-cost-changes.ts
-var RULE_ID9, RULE_SERVICE9, RULE_SEVERITY9, RULE_MESSAGE9, COST_INCREASE_THRESHOLD, costExplorerFullMonthCostChangesRule;
+var RULE_ID8, RULE_SERVICE8, RULE_SEVERITY8, RULE_MESSAGE8, COST_INCREASE_THRESHOLD, costExplorerFullMonthCostChangesRule;
 var init_full_month_cost_changes = __esm({
   "../rules/src/aws/costexplorer/full-month-cost-changes.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID9 = "CLDBRN-AWS-COSTEXPLORER-1";
-    RULE_SERVICE9 = "costexplorer";
-    RULE_SEVERITY9 = "medium";
-    RULE_MESSAGE9 = "AWS services with cost increases greater than 10 USD between the last two full months should be reviewed.";
+    RULE_ID8 = "CLDBRN-AWS-COSTEXPLORER-1";
+    RULE_SERVICE8 = "costexplorer";
+    RULE_SEVERITY8 = "medium";
+    RULE_MESSAGE8 = "AWS services with cost increases greater than 10 USD between the last two full months should be reviewed.";
     COST_INCREASE_THRESHOLD = 10;
     costExplorerFullMonthCostChangesRule = createRule({
-      severity: RULE_SEVERITY9,
-      id: RULE_ID9,
+      severity: RULE_SEVERITY8,
+      id: RULE_ID8,
       name: "Cost Explorer Full Month Cost Changes",
       description: "Flag services with significant cost increases between the last two full months.",
-      message: RULE_MESSAGE9,
+      message: RULE_MESSAGE8,
       provider: "aws",
-      service: RULE_SERVICE9,
+      service: RULE_SERVICE8,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cost-usage"],
       evaluateLive: ({ resources }) => {
         const findings = resources.get("aws-cost-usage").filter((service3) => service3.previousMonthCost > 0 && service3.costIncrease > COST_INCREASE_THRESHOLD).map((service3) => createFindingMatch(`cost/${service3.serviceSlug}`, void 0, service3.accountId));
         return createFinding(
-          { id: RULE_ID9, service: RULE_SERVICE9, severity: RULE_SEVERITY9, message: RULE_MESSAGE9 },
+          { id: RULE_ID8, service: RULE_SERVICE8, severity: RULE_SEVERITY8, message: RULE_MESSAGE8 },
           "discovery",
           findings
         );
@@ -20718,23 +20644,23 @@ var init_costexplorer = __esm({
 });
 
 // ../rules/src/aws/costguardrails/exceeded-budgets.ts
-var RULE_ID10, RULE_SERVICE10, RULE_SEVERITY10, RULE_MESSAGE10, costGuardrailExceededBudgetsRule;
+var RULE_ID9, RULE_SERVICE9, RULE_SEVERITY9, RULE_MESSAGE9, costGuardrailExceededBudgetsRule;
 var init_exceeded_budgets = __esm({
   "../rules/src/aws/costguardrails/exceeded-budgets.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID10 = "CLDBRN-AWS-COSTGUARDRAILS-3";
-    RULE_SERVICE10 = "costguardrails";
-    RULE_SEVERITY10 = "high";
-    RULE_MESSAGE10 = "AWS Budgets whose actual spend exceeds their configured limit should be reviewed.";
+    RULE_ID9 = "CLDBRN-AWS-COSTGUARDRAILS-3";
+    RULE_SERVICE9 = "costguardrails";
+    RULE_SEVERITY9 = "high";
+    RULE_MESSAGE9 = "AWS Budgets whose actual spend exceeds their configured limit should be reviewed.";
     costGuardrailExceededBudgetsRule = createRule({
-      severity: RULE_SEVERITY10,
-      id: RULE_ID10,
+      severity: RULE_SEVERITY9,
+      id: RULE_ID9,
       name: "AWS Budget Limit Exceeded",
       description: "Flag AWS Budgets whose actual spend is greater than their configured limit.",
-      message: RULE_MESSAGE10,
+      message: RULE_MESSAGE9,
       provider: "aws",
-      service: RULE_SERVICE10,
+      service: RULE_SERVICE9,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cost-guardrail-budgets"],
       evaluateLive: ({ resources }) => {
@@ -20744,7 +20670,7 @@ var init_exceeded_budgets = __esm({
         }
         const findings = budgetSummary.budgets.filter((budget) => budget.actualSpend > budget.budgetLimit).map((budget) => createFindingMatch(`budget/${budget.budgetName}`, void 0, budgetSummary.accountId));
         return createFinding(
-          { id: RULE_ID10, service: RULE_SERVICE10, severity: RULE_SEVERITY10, message: RULE_MESSAGE10 },
+          { id: RULE_ID9, service: RULE_SERVICE9, severity: RULE_SEVERITY9, message: RULE_MESSAGE9 },
           "discovery",
           findings
         );
@@ -20754,23 +20680,23 @@ var init_exceeded_budgets = __esm({
 });
 
 // ../rules/src/aws/costguardrails/forecasted-budget-breach.ts
-var RULE_ID11, RULE_SERVICE11, RULE_SEVERITY11, RULE_MESSAGE11, costGuardrailForecastedBudgetBreachRule;
+var RULE_ID10, RULE_SERVICE10, RULE_SEVERITY10, RULE_MESSAGE10, costGuardrailForecastedBudgetBreachRule;
 var init_forecasted_budget_breach = __esm({
   "../rules/src/aws/costguardrails/forecasted-budget-breach.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID11 = "CLDBRN-AWS-COSTGUARDRAILS-4";
-    RULE_SERVICE11 = "costguardrails";
-    RULE_SEVERITY11 = "medium";
-    RULE_MESSAGE11 = "AWS Budgets forecast to exceed their configured limit should be reviewed.";
+    RULE_ID10 = "CLDBRN-AWS-COSTGUARDRAILS-4";
+    RULE_SERVICE10 = "costguardrails";
+    RULE_SEVERITY10 = "medium";
+    RULE_MESSAGE10 = "AWS Budgets forecast to exceed their configured limit should be reviewed.";
     costGuardrailForecastedBudgetBreachRule = createRule({
-      severity: RULE_SEVERITY11,
-      id: RULE_ID11,
+      severity: RULE_SEVERITY10,
+      id: RULE_ID10,
       name: "AWS Budget Forecasted Breach",
       description: "Flag AWS Budgets whose forecasted spend exceeds their limit before actual spend does.",
-      message: RULE_MESSAGE11,
+      message: RULE_MESSAGE10,
       provider: "aws",
-      service: RULE_SERVICE11,
+      service: RULE_SERVICE10,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cost-guardrail-budgets"],
       evaluateLive: ({ resources }) => {
@@ -20782,7 +20708,7 @@ var init_forecasted_budget_breach = __esm({
           (budget) => budget.actualSpend <= budget.budgetLimit && budget.forecastedSpend !== void 0 && budget.forecastedSpend > budget.budgetLimit
         ).map((budget) => createFindingMatch(`budget/${budget.budgetName}`, void 0, budgetSummary.accountId));
         return createFinding(
-          { id: RULE_ID11, service: RULE_SERVICE11, severity: RULE_SEVERITY11, message: RULE_MESSAGE11 },
+          { id: RULE_ID10, service: RULE_SERVICE10, severity: RULE_SEVERITY10, message: RULE_MESSAGE10 },
           "discovery",
           findings
         );
@@ -20792,23 +20718,23 @@ var init_forecasted_budget_breach = __esm({
 });
 
 // ../rules/src/aws/costguardrails/missing-anomaly-detection.ts
-var RULE_ID12, RULE_SERVICE12, RULE_SEVERITY12, RULE_MESSAGE12, costGuardrailMissingAnomalyDetectionRule;
+var RULE_ID11, RULE_SERVICE11, RULE_SEVERITY11, RULE_MESSAGE11, costGuardrailMissingAnomalyDetectionRule;
 var init_missing_anomaly_detection = __esm({
   "../rules/src/aws/costguardrails/missing-anomaly-detection.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID12 = "CLDBRN-AWS-COSTGUARDRAILS-2";
-    RULE_SERVICE12 = "costguardrails";
-    RULE_SEVERITY12 = "low";
-    RULE_MESSAGE12 = "AWS accounts should enable Cost Anomaly Detection monitors for spend spikes.";
+    RULE_ID11 = "CLDBRN-AWS-COSTGUARDRAILS-2";
+    RULE_SERVICE11 = "costguardrails";
+    RULE_SEVERITY11 = "low";
+    RULE_MESSAGE11 = "AWS accounts should enable Cost Anomaly Detection monitors for spend spikes.";
     costGuardrailMissingAnomalyDetectionRule = createRule({
-      severity: RULE_SEVERITY12,
-      id: RULE_ID12,
+      severity: RULE_SEVERITY11,
+      id: RULE_ID11,
       name: "Cost Anomaly Detection Missing",
       description: "Flag AWS accounts that do not have any Cost Anomaly Detection monitors configured.",
-      message: RULE_MESSAGE12,
+      message: RULE_MESSAGE11,
       provider: "aws",
-      service: RULE_SERVICE12,
+      service: RULE_SERVICE11,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cost-anomaly-monitors"],
       evaluateLive: ({ resources }) => {
@@ -20817,7 +20743,7 @@ var init_missing_anomaly_detection = __esm({
           return null;
         }
         return createFinding(
-          { id: RULE_ID12, service: RULE_SERVICE12, severity: RULE_SEVERITY12, message: RULE_MESSAGE12 },
+          { id: RULE_ID11, service: RULE_SERVICE11, severity: RULE_SEVERITY11, message: RULE_MESSAGE11 },
           "discovery",
           [createFindingMatch(monitorSummary.accountId, void 0, monitorSummary.accountId)]
         );
@@ -20827,23 +20753,23 @@ var init_missing_anomaly_detection = __esm({
 });
 
 // ../rules/src/aws/costguardrails/missing-budgets.ts
-var RULE_ID13, RULE_SERVICE13, RULE_SEVERITY13, RULE_MESSAGE13, costGuardrailMissingBudgetsRule;
+var RULE_ID12, RULE_SERVICE12, RULE_SEVERITY12, RULE_MESSAGE12, costGuardrailMissingBudgetsRule;
 var init_missing_budgets = __esm({
   "../rules/src/aws/costguardrails/missing-budgets.ts"() {
     "use strict";
     init_helpers();
-    RULE_ID13 = "CLDBRN-AWS-COSTGUARDRAILS-1";
-    RULE_SERVICE13 = "costguardrails";
-    RULE_SEVERITY13 = "low";
-    RULE_MESSAGE13 = "AWS accounts should define at least one AWS Budget for spend guardrails.";
+    RULE_ID12 = "CLDBRN-AWS-COSTGUARDRAILS-1";
+    RULE_SERVICE12 = "costguardrails";
+    RULE_SEVERITY12 = "low";
+    RULE_MESSAGE12 = "AWS accounts should define at least one AWS Budget for spend guardrails.";
     costGuardrailMissingBudgetsRule = createRule({
-      severity: RULE_SEVERITY13,
-      id: RULE_ID13,
+      severity: RULE_SEVERITY12,
+      id: RULE_ID12,
       name: "AWS Budgets Missing",
       description: "Flag AWS accounts that do not have any AWS Budgets configured.",
-      message: RULE_MESSAGE13,
+      message: RULE_MESSAGE12,
       provider: "aws",
-      service: RULE_SERVICE13,
+      service: RULE_SERVICE12,
       supports: ["discovery"],
       discoveryDependencies: ["aws-cost-guardrail-budgets"],
       evaluateLive: ({ resources }) => {
@@ -20852,7 +20778,7 @@ var init_missing_budgets = __esm({
           return null;
         }
         return createFinding(
-          { id: RULE_ID13, service: RULE_SERVICE13, severity: RULE_SEVERITY13, message: RULE_MESSAGE13 },
+          { id: RULE_ID12, service: RULE_SERVICE12, severity: RULE_SEVERITY12, message: RULE_MESSAGE12 },
           "discovery",
           [createFindingMatch(budgetSummary.accountId, void 0, budgetSummary.accountId)]
         );
@@ -20876,6 +20802,77 @@ var init_costguardrails = __esm({
       costGuardrailExceededBudgetsRule,
       costGuardrailForecastedBudgetBreachRule
     ];
+  }
+});
+
+// ../rules/src/aws/costoptimizationhub/graviton-recommended.ts
+var metadata, costOptimizationHubGravitonRecommendedRule;
+var init_graviton_recommended = __esm({
+  "../rules/src/aws/costoptimizationhub/graviton-recommended.ts"() {
+    "use strict";
+    init_helpers();
+    init_recommendation();
+    init_finding();
+    metadata = {
+      id: "CLDBRN-AWS-COSTOPTIMIZATIONHUB-6",
+      service: "costoptimizationhub",
+      severity: "medium",
+      message: "Review AWS-recommended Graviton migrations, workload compatibility, and rollback requirements."
+    };
+    costOptimizationHubGravitonRecommendedRule = createRule({
+      ...metadata,
+      name: "AWS-Identified Resources Without Graviton",
+      description: "Flag EC2 instances, Auto Scaling groups, and RDS DB instances with AWS Graviton migration recommendations.",
+      provider: "aws",
+      supports: ["discovery"],
+      supersedesRuleIds: ["CLDBRN-AWS-EC2-6", "CLDBRN-AWS-RDS-4"],
+      discoveryDependencies: ["aws-cost-optimization-hub-graviton-recommendations"],
+      evaluateLive: ({ resources }) => createFinding(
+        metadata,
+        "discovery",
+        deduplicateRecommendationMatches(
+          resources.get("aws-cost-optimization-hub-graviton-recommendations").map(createAwsCostOptimizationHubFindingMatch)
+        )
+      )
+    });
+  }
+});
+
+// ../rules/src/aws/costoptimizationhub/idle-capacity.ts
+var RULE_ID13, RULE_SERVICE13, RULE_SEVERITY13, RULE_MESSAGE13, costOptimizationHubIdleCapacityRule;
+var init_idle_capacity = __esm({
+  "../rules/src/aws/costoptimizationhub/idle-capacity.ts"() {
+    "use strict";
+    init_helpers();
+    init_recommendation();
+    init_finding();
+    RULE_ID13 = "CLDBRN-AWS-COSTOPTIMIZATIONHUB-3";
+    RULE_SERVICE13 = "costoptimizationhub";
+    RULE_SEVERITY13 = "medium";
+    RULE_MESSAGE13 = "Idle capacity should be reviewed for the exact action recommended by AWS.";
+    costOptimizationHubIdleCapacityRule = createRule({
+      id: RULE_ID13,
+      name: "AWS-Classified Idle Capacity",
+      description: "Flag AWS recommendations to stop, delete, or scale in idle capacity.",
+      message: RULE_MESSAGE13,
+      severity: RULE_SEVERITY13,
+      provider: "aws",
+      service: RULE_SERVICE13,
+      supports: ["discovery"],
+      discoveryDependencies: ["aws-cost-optimization-hub-idle-recommendations"],
+      evaluateLive: ({ resources }) => createFinding(
+        {
+          id: RULE_ID13,
+          service: RULE_SERVICE13,
+          severity: RULE_SEVERITY13,
+          message: RULE_MESSAGE13
+        },
+        "discovery",
+        deduplicateRecommendationMatches(
+          resources.get("aws-cost-optimization-hub-idle-recommendations").map(createAwsCostOptimizationHubFindingMatch)
+        )
+      )
+    });
   }
 });
 
@@ -25536,7 +25533,6 @@ var init_aws_core = __esm({
     "use strict";
     init_aws();
     init_capabilities();
-    init_helpers();
     awsCoreOptInCapabilities = /* @__PURE__ */ new Set([
       "cost-optimization-hub-enrollment",
       "compute-optimizer-enrollment",
@@ -25546,11 +25542,7 @@ var init_aws_core = __esm({
       id: "aws-core",
       name: "AWS Core",
       description: "Default AWS rule preset for CloudBurn, excluding rules that require explicit AWS setup.",
-      ruleIds: toRuleIds(
-        awsRules.filter(
-          (rule) => !getAwsRuleCapabilities(rule).some((capability) => awsCoreOptInCapabilities.has(capability))
-        )
-      )
+      ruleIds: awsRules.filter((rule) => !getAwsRuleCapabilities(rule).some((capability) => awsCoreOptInCapabilities.has(capability))).map((rule) => rule.id)
     };
   }
 });
@@ -25629,16 +25621,8 @@ var init_src = __esm({
     "use strict";
     init_recording_frequency();
     init_finding();
-    init_graviton_recommended();
-    init_idle_capacity();
-    init_reservation_identity();
-    init_rightsizing_identity();
-    init_upgrade_identity();
     init_aws();
-    init_key_churn();
-    init_key_unused();
     init_resource_identity();
-    init_savings_plans_coverage();
     init_azure();
     init_gcp();
     init_aws_core();
@@ -25681,6 +25665,144 @@ var init_built_in_rules = __esm({
     listBuiltInRuleMetadata = (rules) => rules.map(toBuiltInRuleMetadata).sort(compareBuiltInRules);
     builtInRules = [...awsRules, ...azureRules, ...gcpRules];
     builtInRuleMetadata = listBuiltInRuleMetadata(builtInRules);
+  }
+});
+
+// ../sdk/src/providers/aws/errors.ts
+var RESOURCE_EXPLORER_SETUP_DOCS_URL, AWS_DISCOVERY_ERROR_CODES, toErrorChain, isAwsDiscoveryErrorCode, isAwsAccessDeniedError, formatAwsAccessDeniedReason, isAwsThrottlingError, getAwsErrorCode, wrapAwsServiceError, extractNestedAwsMessage, formatAwsServiceErrorMessage, AwsDiscoveryError;
+var init_errors = __esm({
+  "../sdk/src/providers/aws/errors.ts"() {
+    "use strict";
+    RESOURCE_EXPLORER_SETUP_DOCS_URL = "https://docs.aws.amazon.com/resource-explorer/latest/userguide/getting-started-setting-up.html";
+    AWS_DISCOVERY_ERROR_CODES = [
+      "INVALID_AWS_REGION",
+      "INVALID_RESOURCE_EXPLORER_RESOURCE_TYPE",
+      "RESOURCE_EXPLORER_AGGREGATOR_REQUIRED",
+      "RESOURCE_EXPLORER_AGGREGATOR_SWITCH_REQUIRES_DELAY",
+      "RESOURCE_EXPLORER_DEFAULT_VIEW_REQUIRED",
+      "RESOURCE_EXPLORER_FILTERED_VIEW_UNSUPPORTED",
+      "RESOURCE_EXPLORER_NOT_ENABLED",
+      "RESOURCE_EXPLORER_REGION_NOT_ENABLED",
+      "RESOURCE_EXPLORER_TAGS_VIEW_REQUIRED"
+    ];
+    toErrorChain = (err) => {
+      const chain = [];
+      let current = err;
+      let depth = 0;
+      while (current instanceof Error && depth < 5) {
+        chain.push(current);
+        current = current.cause;
+        depth += 1;
+      }
+      return chain;
+    };
+    isAwsDiscoveryErrorCode = (code) => AWS_DISCOVERY_ERROR_CODES.includes(code);
+    isAwsAccessDeniedError = (err) => {
+      const chain = toErrorChain(err);
+      if (chain.length === 0) {
+        return false;
+      }
+      return chain.some((serviceError) => {
+        const candidates = [serviceError.name, serviceError.code, serviceError.Code, serviceError.message].filter((value) => value !== void 0).map((value) => value.toLowerCase());
+        return candidates.some(
+          (value) => value.includes("accessdenied") || value.includes("unauthorized") || value.includes("not authorized") || value.includes("access denied")
+        );
+      });
+    };
+    formatAwsAccessDeniedReason = (err) => {
+      for (const serviceError of toErrorChain(err)) {
+        const message3 = serviceError.message.toLowerCase();
+        if (message3.includes("service control policy") || message3.includes("by scp")) {
+          return "a service control policy (SCP)";
+        }
+        if (message3.includes("resource-based policy")) {
+          return "a resource-based policy";
+        }
+      }
+      return "AWS permissions";
+    };
+    isAwsThrottlingError = (err) => {
+      if (!(err instanceof Error)) {
+        return false;
+      }
+      const serviceError = err;
+      const candidates = [err.name, serviceError.code, serviceError.Code, err.message].filter((value) => value !== void 0).map((value) => value.toLowerCase());
+      return candidates.some(
+        (value) => value.includes("throttl") || value.includes("toomanyrequests") || value.includes("ratelimit") || value.includes("rate exceeded") || value.includes("requestlimitexceeded")
+      ) || serviceError.$metadata?.httpStatusCode === 429;
+    };
+    getAwsErrorCode = (err) => {
+      for (const serviceError of toErrorChain(err)) {
+        if (serviceError.code) {
+          return serviceError.code;
+        }
+        if (serviceError.Code) {
+          return serviceError.Code;
+        }
+        if (serviceError.name && serviceError.name !== "Error") {
+          return serviceError.name;
+        }
+      }
+      return void 0;
+    };
+    wrapAwsServiceError = (err, service3, operation, region) => {
+      const wrapped = new Error(formatAwsServiceErrorMessage(err, service3, operation, region), {
+        cause: err
+      });
+      if (err instanceof Error) {
+        const serviceError = err;
+        if (serviceError.name && serviceError.name !== "Error") {
+          wrapped.name = serviceError.name;
+        }
+        if (serviceError.code) {
+          wrapped.code = serviceError.code;
+        }
+        if (serviceError.Code) {
+          wrapped.Code = serviceError.Code;
+        }
+        if (serviceError.$metadata) {
+          wrapped.$metadata = { ...serviceError.$metadata };
+        }
+      }
+      return wrapped;
+    };
+    extractNestedAwsMessage = (cause) => {
+      if (!(cause instanceof Error)) {
+        return void 0;
+      }
+      const message3 = cause.message.trim();
+      return message3.length > 0 ? message3 : void 0;
+    };
+    formatAwsServiceErrorMessage = (err, service3, operation, region) => {
+      if (!(err instanceof Error)) {
+        return `${service3} ${operation} failed in ${region}.`;
+      }
+      const serviceError = err;
+      const errorCode = serviceError.code ?? serviceError.Code ?? err.name;
+      const requestId = serviceError.$metadata?.requestId;
+      const message3 = err.message.trim();
+      const nestedMessage = extractNestedAwsMessage(serviceError.cause);
+      const bestMessage = nestedMessage && nestedMessage !== message3 && (message3.length === 0 || message3.toLowerCase() === "rate exceeded") ? nestedMessage : message3;
+      const requestIdSuffix = requestId ? ` Request ID: ${requestId}.` : "";
+      return `${service3} ${operation} failed in ${region} with ${errorCode}: ${bestMessage || "Unknown AWS service error."}${requestIdSuffix}`;
+    };
+    AwsDiscoveryError = class extends Error {
+      /**
+       * Stable error code exposed to the CLI error formatter.
+       */
+      code;
+      /**
+       * Creates a typed AWS discovery error.
+       *
+       * @param code - Stable CloudBurn discovery error code.
+       * @param message - User-facing error message.
+       */
+      constructor(code, message3) {
+        super(message3);
+        this.name = "AwsDiscoveryError";
+        this.code = code;
+      }
+    };
   }
 });
 
@@ -36599,132 +36721,6 @@ var init_credentials = __esm({
   }
 });
 
-// ../sdk/src/providers/aws/errors.ts
-var RESOURCE_EXPLORER_SETUP_DOCS_URL, toErrorChain, isAwsAccessDeniedError, formatAwsAccessDeniedReason, isAwsThrottlingError, getAwsErrorCode, wrapAwsServiceError, extractNestedAwsMessage, formatAwsServiceErrorMessage, AwsDiscoveryError;
-var init_errors = __esm({
-  "../sdk/src/providers/aws/errors.ts"() {
-    "use strict";
-    RESOURCE_EXPLORER_SETUP_DOCS_URL = "https://docs.aws.amazon.com/resource-explorer/latest/userguide/getting-started-setting-up.html";
-    toErrorChain = (err) => {
-      const chain = [];
-      let current = err;
-      let depth = 0;
-      while (current instanceof Error && depth < 5) {
-        chain.push(current);
-        current = current.cause;
-        depth += 1;
-      }
-      return chain;
-    };
-    isAwsAccessDeniedError = (err) => {
-      const chain = toErrorChain(err);
-      if (chain.length === 0) {
-        return false;
-      }
-      return chain.some((serviceError) => {
-        const candidates = [serviceError.name, serviceError.code, serviceError.Code, serviceError.message].filter((value) => value !== void 0).map((value) => value.toLowerCase());
-        return candidates.some(
-          (value) => value.includes("accessdenied") || value.includes("unauthorized") || value.includes("not authorized") || value.includes("access denied")
-        );
-      });
-    };
-    formatAwsAccessDeniedReason = (err) => {
-      for (const serviceError of toErrorChain(err)) {
-        const message3 = serviceError.message.toLowerCase();
-        if (message3.includes("service control policy") || message3.includes("by scp")) {
-          return "a service control policy (SCP)";
-        }
-        if (message3.includes("resource-based policy")) {
-          return "a resource-based policy";
-        }
-      }
-      return "AWS permissions";
-    };
-    isAwsThrottlingError = (err) => {
-      if (!(err instanceof Error)) {
-        return false;
-      }
-      const serviceError = err;
-      const candidates = [err.name, serviceError.code, serviceError.Code, err.message].filter((value) => value !== void 0).map((value) => value.toLowerCase());
-      return candidates.some(
-        (value) => value.includes("throttl") || value.includes("toomanyrequests") || value.includes("ratelimit") || value.includes("rate exceeded") || value.includes("requestlimitexceeded")
-      ) || serviceError.$metadata?.httpStatusCode === 429;
-    };
-    getAwsErrorCode = (err) => {
-      for (const serviceError of toErrorChain(err)) {
-        if (serviceError.code) {
-          return serviceError.code;
-        }
-        if (serviceError.Code) {
-          return serviceError.Code;
-        }
-        if (serviceError.name && serviceError.name !== "Error") {
-          return serviceError.name;
-        }
-      }
-      return void 0;
-    };
-    wrapAwsServiceError = (err, service3, operation, region) => {
-      const wrapped = new Error(formatAwsServiceErrorMessage(err, service3, operation, region), {
-        cause: err
-      });
-      if (err instanceof Error) {
-        const serviceError = err;
-        if (serviceError.name && serviceError.name !== "Error") {
-          wrapped.name = serviceError.name;
-        }
-        if (serviceError.code) {
-          wrapped.code = serviceError.code;
-        }
-        if (serviceError.Code) {
-          wrapped.Code = serviceError.Code;
-        }
-        if (serviceError.$metadata) {
-          wrapped.$metadata = { ...serviceError.$metadata };
-        }
-      }
-      return wrapped;
-    };
-    extractNestedAwsMessage = (cause) => {
-      if (!(cause instanceof Error)) {
-        return void 0;
-      }
-      const message3 = cause.message.trim();
-      return message3.length > 0 ? message3 : void 0;
-    };
-    formatAwsServiceErrorMessage = (err, service3, operation, region) => {
-      if (!(err instanceof Error)) {
-        return `${service3} ${operation} failed in ${region}.`;
-      }
-      const serviceError = err;
-      const errorCode = serviceError.code ?? serviceError.Code ?? err.name;
-      const requestId = serviceError.$metadata?.requestId;
-      const message3 = err.message.trim();
-      const nestedMessage = extractNestedAwsMessage(serviceError.cause);
-      const bestMessage = nestedMessage && nestedMessage !== message3 && (message3.length === 0 || message3.toLowerCase() === "rate exceeded") ? nestedMessage : message3;
-      const requestIdSuffix = requestId ? ` Request ID: ${requestId}.` : "";
-      return `${service3} ${operation} failed in ${region} with ${errorCode}: ${bestMessage || "Unknown AWS service error."}${requestIdSuffix}`;
-    };
-    AwsDiscoveryError = class extends Error {
-      /**
-       * Stable error code exposed to the CLI error formatter.
-       */
-      code;
-      /**
-       * Creates a typed AWS discovery error.
-       *
-       * @param code - Stable CloudBurn discovery error code.
-       * @param message - User-facing error message.
-       */
-      constructor(code, message3) {
-        super(message3);
-        this.name = "AwsDiscoveryError";
-        this.code = code;
-      }
-    };
-  }
-});
-
 // ../sdk/src/providers/aws/regions.ts
 var AWS_REGION_PATTERN, AWS_REGIONS, SUPPORTED_AWS_REGIONS_MESSAGE, assertAwsRegionShape, assertValidAwsRegion, assertSupportedAwsRegion;
 var init_regions = __esm({
@@ -36996,20 +36992,18 @@ var init_registry = __esm({
       const enabledRules = new Set(modeConfig.enabledRules ?? awsCorePreset.ruleIds);
       const disabledRules = modeConfig.disabledRules ? new Set(modeConfig.disabledRules) : void 0;
       const services = modeConfig.services ? new Set(modeConfig.services) : void 0;
-      return {
-        activeRules: awsRules.filter((rule) => {
-          if (!rule.supports.includes(mode)) {
-            return false;
-          }
-          if (services && !services.has(rule.service)) {
-            return false;
-          }
-          if (!enabledRules.has(rule.id)) {
-            return false;
-          }
-          return !disabledRules?.has(rule.id);
-        })
-      };
+      return awsRules.filter((rule) => {
+        if (!rule.supports.includes(mode)) {
+          return false;
+        }
+        if (services && !services.has(rule.service)) {
+          return false;
+        }
+        if (!enabledRules.has(rule.id)) {
+          return false;
+        }
+        return !disabledRules?.has(rule.id);
+      });
     };
   }
 });
@@ -39155,55 +39149,16 @@ var init_evidence = __esm({
   }
 });
 
-// ../sdk/src/providers/aws/resources/utils.ts
-var resolveAwsAccountIdForLoad, toUtcMonthBoundary, addUtcMonths, formatUtcDate, parseFiniteNumber, chunkItems, extractTerminalArnResourceIdentifier, extractTerminalResourceIdentifier;
-var init_utils = __esm({
-  "../sdk/src/providers/aws/resources/utils.ts"() {
-    "use strict";
-    init_concurrency();
-    init_request();
-    init_client();
-    resolveAwsAccountIdForLoad = (context6) => context6?.resolveAccountId() ?? resolveAwsAccountId();
-    toUtcMonthBoundary = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-    addUtcMonths = (date, months) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
-    formatUtcDate = (date) => date.toISOString().slice(0, 10);
-    parseFiniteNumber = (value) => {
-      if (!value?.trim()) {
-        return null;
-      }
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-    chunkItems = (items, size) => {
-      const chunks = [];
-      for (let index = 0; index < items.length; index += size) {
-        chunks.push(items.slice(index, index + size));
-      }
-      return chunks;
-    };
-    extractTerminalArnResourceIdentifier = (arn) => {
-      const match = /[:/]([^:/]+)$/u.exec(arn);
-      return match?.[1] ?? null;
-    };
-    extractTerminalResourceIdentifier = (resourceName, arn) => {
-      if (resourceName) {
-        return resourceName;
-      }
-      return extractTerminalArnResourceIdentifier(arn);
-    };
-  }
-});
-
 // ../sdk/src/providers/aws/metric-cache.ts
 var DAY_MS13, RECENT_OVERLAP_MS, RECENT_TTL_MS, HISTORICAL_TTL_MS, MAX_INTERVALS_PER_QUERY, intervalWidth, intervals, validEvidence, fetchCachedCloudWatchSignals;
 var init_metric_cache = __esm({
   "../sdk/src/providers/aws/metric-cache.ts"() {
     "use strict";
+    init_concurrency();
     init_evidence();
     init_execution();
     init_metric_planner();
     init_request_attribution();
-    init_utils();
     DAY_MS13 = 864e5;
     RECENT_OVERLAP_MS = 3 * DAY_MS13;
     RECENT_TTL_MS = 3e5;
@@ -39337,15 +39292,54 @@ var init_metric_cache = __esm({
   }
 });
 
+// ../sdk/src/providers/aws/resources/utils.ts
+var resolveAwsAccountIdForLoad, toUtcMonthBoundary, addUtcMonths, formatUtcDate, parseFiniteNumber, chunkItems, extractTerminalArnResourceIdentifier, extractTerminalResourceIdentifier;
+var init_utils = __esm({
+  "../sdk/src/providers/aws/resources/utils.ts"() {
+    "use strict";
+    init_client();
+    resolveAwsAccountIdForLoad = (context6) => context6?.resolveAccountId() ?? resolveAwsAccountId();
+    toUtcMonthBoundary = (date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+    addUtcMonths = (date, months) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+    formatUtcDate = (date) => date.toISOString().slice(0, 10);
+    parseFiniteNumber = (value) => {
+      if (!value?.trim()) {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    chunkItems = (items, size) => {
+      const chunks = [];
+      for (let index = 0; index < items.length; index += size) {
+        chunks.push(items.slice(index, index + size));
+      }
+      return chunks;
+    };
+    extractTerminalArnResourceIdentifier = (arn) => {
+      const match = /[:/]([^:/]+)$/u.exec(arn);
+      return match?.[1] ?? null;
+    };
+    extractTerminalResourceIdentifier = (resourceName, arn) => {
+      if (resourceName) {
+        return resourceName;
+      }
+      return extractTerminalArnResourceIdentifier(arn);
+    };
+  }
+});
+
 // ../sdk/src/providers/aws/resources/cloudwatch.ts
 var import_client_cloudwatch2, CLOUDWATCH_METRIC_QUERY_BATCH_SIZE, CLOUDWATCH_MAX_DATAPOINTS, CLOUDWATCH_BATCH_CONCURRENCY, CLOUDWATCH_QUERY_ATTEMPTS, cloudWatchWindow, getCompleteCloudWatchPoints, createMetricBatches, appendMessages, fetchCloudWatchSignalsLive, fetchCloudWatchSignals;
 var init_cloudwatch2 = __esm({
   "../sdk/src/providers/aws/resources/cloudwatch.ts"() {
     "use strict";
     import_client_cloudwatch2 = require("@aws-sdk/client-cloudwatch");
+    init_concurrency();
     init_client();
     init_execution();
     init_metric_cache();
+    init_request();
     init_request_attribution();
     init_utils();
     CLOUDWATCH_METRIC_QUERY_BATCH_SIZE = 500;
@@ -39555,8 +39549,10 @@ var init_cloudfront2 = __esm({
   "../sdk/src/providers/aws/resources/cloudfront.ts"() {
     "use strict";
     import_client_cloudfront2 = require("@aws-sdk/client-cloudfront");
+    init_concurrency();
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     CLOUDFRONT_DISTRIBUTION_CONCURRENCY = 10;
@@ -39681,6 +39677,7 @@ var init_cloudtrail2 = __esm({
     "use strict";
     import_client_cloudtrail2 = require("@aws-sdk/client-cloudtrail");
     init_client();
+    init_request();
     init_utils();
     CLOUDTRAIL_DESCRIBE_BATCH_SIZE = 20;
     CLOUDTRAIL_TRAIL_ARN_PATTERN = /^arn:[^:]+:cloudtrail:[^:]+:[^:]+:trail\/(.+)$/u;
@@ -39744,8 +39741,9 @@ var init_cloudwatch_logs = __esm({
   "../sdk/src/providers/aws/resources/cloudwatch-logs.ts"() {
     "use strict";
     import_client_cloudwatch_logs2 = require("@aws-sdk/client-cloudwatch-logs");
+    init_concurrency();
     init_client();
-    init_utils();
+    init_request();
     CLOUDWATCH_LOG_GROUP_ARN_PATTERN = /^arn:[^:]+:logs:[^:]+:[^:]+:log-group:(.+)$/u;
     CLOUDWATCH_LOG_GROUP_HYDRATION_CONCURRENCY = 10;
     extractAccountIdFromArn = (arn) => {
@@ -39944,8 +39942,10 @@ var init_config2 = __esm({
     import_client_cloudwatch3 = require("@aws-sdk/client-cloudwatch");
     import_client_config_service2 = require("@aws-sdk/client-config-service");
     init_src();
+    init_concurrency();
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     CONFIG_METRIC_NAMESPACE = "AWS/Config";
@@ -40380,6 +40380,7 @@ var init_cost_explorer = __esm({
     import_client_cost_explorer2 = require("@aws-sdk/client-cost-explorer");
     init_client();
     init_execution();
+    init_request();
     init_utils();
     COST_EXPLORER_CONTROL_REGION = "us-east-1";
     slugifyServiceName = (serviceName) => serviceName.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
@@ -40461,6 +40462,7 @@ var init_cost_guardrails = __esm({
     import_client_budgets2 = require("@aws-sdk/client-budgets");
     import_client_cost_explorer3 = require("@aws-sdk/client-cost-explorer");
     init_client();
+    init_request();
     init_utils();
     COST_CONTROL_REGION = "us-east-1";
     PAGE_SIZE = 100;
@@ -40608,8 +40610,10 @@ var init_cost_optimization_hub = __esm({
     "use strict";
     import_client_cost_optimization_hub2 = require("@aws-sdk/client-cost-optimization-hub");
     init_src();
+    init_concurrency();
     init_client();
     init_errors();
+    init_request();
     init_cost_optimization_hub_rightsizing();
     init_utils();
     COST_OPTIMIZATION_HUB_REGION = "us-east-1";
@@ -41433,9 +41437,11 @@ var init_dynamodb2 = __esm({
     "use strict";
     import_client_application_auto_scaling2 = require("@aws-sdk/client-application-auto-scaling");
     import_client_dynamodb2 = require("@aws-sdk/client-dynamodb");
+    init_concurrency();
     init_client();
     init_errors();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     DYNAMODB_TABLE_CONCURRENCY = 10;
@@ -41680,6 +41686,7 @@ var init_ebs2 = __esm({
     "use strict";
     import_client_ec22 = require("@aws-sdk/client-ec2");
     init_client();
+    init_request();
     init_utils();
     EBS_VOLUME_ARN_PREFIX = "volume/";
     EBS_SNAPSHOT_ARN_PREFIX = "snapshot/";
@@ -41814,6 +41821,7 @@ var init_ec22 = __esm({
     "use strict";
     import_client_ec23 = require("@aws-sdk/client-ec2");
     init_client();
+    init_request();
     init_utils();
     EC2_INSTANCE_ARN_PREFIX = "instance/";
     EC2_DESCRIBE_BATCH_SIZE = 100;
@@ -41903,6 +41911,7 @@ var init_ec2_elastic_ips = __esm({
     "use strict";
     import_client_ec24 = require("@aws-sdk/client-ec2");
     init_client();
+    init_request();
     init_utils();
     ELASTIC_IP_ARN_PREFIX = "elastic-ip/";
     EIP_DESCRIBE_BATCH_SIZE = 100;
@@ -42088,8 +42097,10 @@ var init_ec2_nat_gateways = __esm({
   "../sdk/src/providers/aws/resources/ec2-nat-gateways.ts"() {
     "use strict";
     import_client_ec25 = require("@aws-sdk/client-ec2");
+    init_concurrency();
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_resource_metrics();
     init_utils();
@@ -42219,6 +42230,7 @@ var init_ec2_reserved_instances = __esm({
     "use strict";
     import_client_ec26 = require("@aws-sdk/client-ec2");
     init_client();
+    init_request();
     init_utils();
     EC2_RESERVED_INSTANCE_ARN_PREFIX = "reserved-instances/";
     EC2_RESERVED_INSTANCE_BATCH_SIZE = 100;
@@ -42331,6 +42343,7 @@ var init_ec2_transit_gateway_vpc_attachments = __esm({
     init_client();
     init_evidence();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     TRANSIT_GATEWAY_ATTACHMENT_DESCRIBE_BATCH_SIZE = 100;
@@ -42486,9 +42499,7 @@ var init_ec2_transit_gateway_vpc_attachments = __esm({
               region,
               () => client.send(
                 new import_client_ec27.DescribeTransitGatewayVpcAttachmentsCommand({
-                  TransitGatewayAttachmentIds: vpcBatch.map(
-                    ({ transitGatewayAttachmentId }) => transitGatewayAttachmentId
-                  )
+                  TransitGatewayAttachmentIds: vpcBatch.map(({ transitGatewayAttachmentId }) => transitGatewayAttachmentId)
                 })
               )
             );
@@ -42693,6 +42704,7 @@ var init_ecr2 = __esm({
     "use strict";
     import_client_ecr2 = require("@aws-sdk/client-ecr");
     init_client();
+    init_request();
     init_ecr_lifecycle_policy();
     init_utils();
     ECR_LIFECYCLE_POLICY_BATCH_SIZE = 25;
@@ -42783,6 +42795,7 @@ var init_ecs2 = __esm({
     import_client_ec28 = require("@aws-sdk/client-ec2");
     import_client_ecs2 = require("@aws-sdk/client-ecs");
     init_client();
+    init_request();
     init_utils();
     ECS_CONTAINER_INSTANCE_BATCH_SIZE = 100;
     ECS_SERVICE_BATCH_SIZE = 10;
@@ -43008,6 +43021,7 @@ var init_ecs_autoscaling = __esm({
     "use strict";
     import_client_application_auto_scaling3 = require("@aws-sdk/client-application-auto-scaling");
     init_client();
+    init_request();
     init_utils();
     APPLICATION_AUTO_SCALING_BATCH_SIZE2 = 50;
     parseEcsAutoscalingService = (arn) => {
@@ -43171,6 +43185,7 @@ var init_eks2 = __esm({
     "use strict";
     import_client_eks2 = require("@aws-sdk/client-eks");
     init_client();
+    init_request();
     init_utils();
     EKS_NODEGROUP_CONCURRENCY = 5;
     parseEksClusterResource = (arn) => {
@@ -43269,6 +43284,7 @@ var init_elasticache2 = __esm({
     import_client_elasticache2 = require("@aws-sdk/client-elasticache");
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     ELASTICACHE_PAGE_SIZE = 100;
@@ -43477,8 +43493,10 @@ var init_elbv2 = __esm({
     "use strict";
     import_client_elastic_load_balancing2 = require("@aws-sdk/client-elastic-load-balancing");
     import_client_elastic_load_balancing_v22 = require("@aws-sdk/client-elastic-load-balancing-v2");
+    init_concurrency();
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     CLASSIC_LOAD_BALANCER_ARN_PREFIX = "loadbalancer/";
@@ -43908,6 +43926,7 @@ var init_emr2 = __esm({
     import_client_emr2 = require("@aws-sdk/client-emr");
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     EMR_CLUSTER_HYDRATION_CONCURRENCY = 10;
@@ -44048,9 +44067,11 @@ var init_kms2 = __esm({
     "use strict";
     import_node_crypto5 = require("node:crypto");
     import_client_kms2 = require("@aws-sdk/client-kms");
+    init_concurrency();
     init_client();
     init_errors();
     init_execution();
+    init_request();
     init_utils();
     KMS_KEY_CONCURRENCY = 10;
     KMS_KEY_MONTHLY_STORAGE_PRICE_USD = 1;
@@ -44406,23 +44427,8 @@ var init_kms2 = __esm({
   }
 });
 
-// ../sdk/src/providers/aws/resources/lambda-identity.ts
-var getUnqualifiedLambdaFunctionArn;
-var init_lambda_identity = __esm({
-  "../sdk/src/providers/aws/resources/lambda-identity.ts"() {
-    "use strict";
-    getUnqualifiedLambdaFunctionArn = (functionArn) => {
-      const functionMarker = ":function:";
-      const functionMarkerIndex = functionArn.indexOf(functionMarker);
-      if (functionMarkerIndex < 0) return functionArn;
-      const qualifierIndex = functionArn.indexOf(":", functionMarkerIndex + functionMarker.length);
-      return qualifierIndex < 0 ? functionArn : functionArn.slice(0, qualifierIndex);
-    };
-  }
-});
-
 // ../sdk/src/providers/aws/resources/lambda.ts
-var import_client_compute_optimizer2, import_client_lambda2, DEFAULT_LAMBDA_ARCHITECTURES, DEFAULT_LAMBDA_MEMORY_MB, DEFAULT_LAMBDA_TIMEOUT_SECONDS, SEVEN_DAYS_IN_SECONDS2, LAMBDA_METRIC_PERIOD_IN_SECONDS, getSum, getDurationAverage, groupLambdaResourcesByRegion, hydrateAwsLambdaFunctions, LAMBDA_MEMORY_ASSESSMENT_PRECEDENCE, toLambdaMemoryAssessment, LAMBDA_RECOMMENDATION_FINDING_FILTER, hydrateAwsLambdaMemoryRecommendations, hydrateAwsLambdaFunctionMetrics;
+var import_client_compute_optimizer2, import_client_lambda2, DEFAULT_LAMBDA_ARCHITECTURES, DEFAULT_LAMBDA_MEMORY_MB, DEFAULT_LAMBDA_TIMEOUT_SECONDS, SEVEN_DAYS_IN_SECONDS2, LAMBDA_METRIC_PERIOD_IN_SECONDS, getSum, getDurationAverage, getUnqualifiedLambdaFunctionArn, groupLambdaResourcesByRegion, hydrateAwsLambdaFunctions, LAMBDA_MEMORY_ASSESSMENT_PRECEDENCE, toLambdaMemoryAssessment, LAMBDA_RECOMMENDATION_FINDING_FILTER, hydrateAwsLambdaMemoryRecommendations, hydrateAwsLambdaFunctionMetrics;
 var init_lambda2 = __esm({
   "../sdk/src/providers/aws/resources/lambda.ts"() {
     "use strict";
@@ -44430,8 +44436,8 @@ var init_lambda2 = __esm({
     import_client_lambda2 = require("@aws-sdk/client-lambda");
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
-    init_lambda_identity();
     init_utils();
     DEFAULT_LAMBDA_ARCHITECTURES = ["x86_64"];
     DEFAULT_LAMBDA_MEMORY_MB = 128;
@@ -44444,6 +44450,13 @@ var init_lambda2 = __esm({
       const countsByTimestamp = new Map(counts.map((point) => [point.timestamp, point.value]));
       if (sums.some((point) => point.value < 0 || (countsByTimestamp.get(point.timestamp) ?? 0) <= 0)) return null;
       return getSum(sums) / getSum(counts);
+    };
+    getUnqualifiedLambdaFunctionArn = (functionArn) => {
+      const functionMarker = ":function:";
+      const functionMarkerIndex = functionArn.indexOf(functionMarker);
+      if (functionMarkerIndex < 0) return functionArn;
+      const qualifierIndex = functionArn.indexOf(":", functionMarkerIndex + functionMarker.length);
+      return qualifierIndex < 0 ? functionArn : functionArn.slice(0, qualifierIndex);
     };
     groupLambdaResourcesByRegion = (resources) => {
       const resourcesByRegion = /* @__PURE__ */ new Map();
@@ -44636,6 +44649,7 @@ var init_rds2 = __esm({
     "use strict";
     import_client_rds2 = require("@aws-sdk/client-rds");
     init_client();
+    init_request();
     init_utils();
     RDS_DB_ARN_PREFIX = "db:";
     RDS_SNAPSHOT_ARN_PREFIX = "snapshot:";
@@ -44955,6 +44969,7 @@ var init_redshift2 = __esm({
     init_client();
     init_errors();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_utils();
     REDSHIFT_PAGE_SIZE = 100;
@@ -45210,7 +45225,9 @@ var init_route532 = __esm({
   "../sdk/src/providers/aws/resources/route53.ts"() {
     "use strict";
     import_client_route_532 = require("@aws-sdk/client-route-53");
+    init_concurrency();
     init_client();
+    init_request();
     init_utils();
     ROUTE53_CONTROL_REGION = "us-east-1";
     ROUTE53_ZONE_CONCURRENCY = 5;
@@ -45402,9 +45419,10 @@ var init_s32 = __esm({
   "../sdk/src/providers/aws/resources/s3.ts"() {
     "use strict";
     import_client_s32 = require("@aws-sdk/client-s3");
+    init_concurrency();
     init_client();
+    init_request();
     init_s3_analysis();
-    init_utils();
     S3_HYDRATION_CONCURRENCY = 10;
     extractBucketName = (resource) => {
       if (resource.name) {
@@ -45506,8 +45524,10 @@ var init_sagemaker2 = __esm({
   "../sdk/src/providers/aws/resources/sagemaker.ts"() {
     "use strict";
     import_client_sagemaker2 = require("@aws-sdk/client-sagemaker");
+    init_concurrency();
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_resource_metrics();
     init_utils();
@@ -45742,6 +45762,7 @@ var init_savings_plans_coverage2 = __esm({
     init_client();
     init_errors();
     init_execution();
+    init_request();
     init_utils();
     COST_EXPLORER_CONTROL_REGION2 = "us-east-1";
     LOOKBACK_DAYS2 = 30;
@@ -45883,7 +45904,7 @@ var init_secretsmanager2 = __esm({
     "use strict";
     import_client_secrets_manager2 = require("@aws-sdk/client-secrets-manager");
     init_client();
-    init_utils();
+    init_request();
     hydrateAwsSecretsManagerSecrets = async (resources) => {
       const secretsByRegion = /* @__PURE__ */ new Map();
       for (const resource of resources) {
@@ -45940,8 +45961,10 @@ var init_tagging2 = __esm({
     import_client_ec29 = require("@aws-sdk/client-ec2");
     import_client_kms3 = require("@aws-sdk/client-kms");
     import_client_ssm2 = require("@aws-sdk/client-ssm");
+    init_concurrency();
     init_client();
     init_errors();
+    init_request();
     init_utils();
     UNTAGGED_RESOURCES_FILTER = "resourcetype.supports:tags tag:none";
     EC2_RESOURCE_NOT_FOUND_CODES = /* @__PURE__ */ new Set([
@@ -46228,8 +46251,10 @@ var init_vpc_endpoints = __esm({
   "../sdk/src/providers/aws/resources/vpc-endpoints.ts"() {
     "use strict";
     import_client_ec210 = require("@aws-sdk/client-ec2");
+    init_concurrency();
     init_client();
     init_execution();
+    init_request();
     init_cloudwatch2();
     init_resource_metrics();
     init_utils();
@@ -47541,11 +47566,12 @@ var init_resource_explorer = __esm({
     "use strict";
     import_client_resource_explorer_22 = require("@aws-sdk/client-resource-explorer-2");
     init_debug();
+    init_concurrency();
     init_client();
     init_errors();
     init_evidence();
     init_execution();
-    init_utils();
+    init_request();
     CATALOG_TTL_MS = 18e4;
     DEFAULT_RESOURCE_EXPLORER_VIEW_NAME = "cloudburn-default";
     TERMINAL_OPERATION_STATUSES = /* @__PURE__ */ new Set(["FAILED", "SKIPPED", "SUCCEEDED"]);
@@ -48504,6 +48530,7 @@ var init_discovery = __esm({
     "use strict";
     init_src();
     init_debug();
+    init_concurrency();
     init_capabilities2();
     init_client();
     init_discovery_registry();
@@ -48512,7 +48539,6 @@ var init_discovery = __esm({
     init_execution();
     init_request_attribution();
     init_resource_explorer();
-    init_utils();
     sortUnique3 = (values) => [...new Set(values)].sort((left, right) => left.localeCompare(right));
     pluralize2 = (count, singular, plural) => count === 1 ? singular : plural;
     buildDiscoveryWarning = (regionStatuses, indexedRegionCount, totalRegionCount) => {
@@ -49458,12 +49484,12 @@ var init_run_live = __esm({
       return metadata2;
     };
     runLiveScan = async (config, target, options) => {
-      const registry = buildRuleRegistry(config, "discovery");
-      emitDebugLog(options?.debugLogger, `sdk: resolved ${registry.activeRules.length} active discovery rules`);
+      const activeRules = buildRuleRegistry(config, "discovery");
+      emitDebugLog(options?.debugLogger, `sdk: resolved ${activeRules.length} active discovery rules`);
       const startedAtMs = Date.now();
       let completedRules = 0;
       let firstRuleMs;
-      const context6 = await discoverAwsResources(registry.activeRules, target, {
+      const context6 = await discoverAwsResources(activeRules, target, {
         debugLogger: options?.debugLogger,
         onProgress: options?.onProgress,
         ...options?.onProgress ? {
@@ -49486,13 +49512,13 @@ var init_run_live = __esm({
               findings,
               ...evaluation.reason ? { reason: evaluation.reason } : {},
               completedRules,
-              totalRules: registry.activeRules.length,
+              totalRules: activeRules.length,
               elapsedMs
             });
           }
         } : {}
       });
-      const result = evaluateLiveRules(registry.activeRules, context6, options);
+      const result = evaluateLiveRules(activeRules, context6, options);
       emitDebugLog(
         options?.debugLogger,
         `sdk: live scan timing ${JSON.stringify({ firstRuleMs: firstRuleMs ?? null, totalMs: Date.now() - startedAtMs })}`
@@ -54323,7 +54349,157 @@ function getOctokit(token, options, ...additionalPlugins) {
 // ../sdk/src/index.ts
 init_src();
 init_built_in_rules();
+
+// ../sdk/src/config/validate.ts
+init_src();
+init_built_in_rules();
+var supportedFormats = /* @__PURE__ */ new Set(["json", "table"]);
+var supportedSeverities = new Set(SEVERITIES);
+var rulesById = new Map(builtInRuleMetadata.map((rule) => [rule.id, rule]));
+var servicesByMode = {
+  discovery: new Set(
+    builtInRuleMetadata.filter((rule) => rule.supports.includes("discovery")).map((rule) => rule.service)
+  ),
+  iac: new Set(builtInRuleMetadata.filter((rule) => rule.supports.includes("iac")).map((rule) => rule.service))
+};
+var allServices = new Set(builtInRuleMetadata.map((rule) => rule.service));
+var normalizeRuleList = (value) => value?.map((ruleId) => ruleId.trim());
+var normalizeServiceList = (value) => value?.map((service3) => service3.trim().toLowerCase());
+var assertKnownServices = (services, validServices, context6) => {
+  const invalidService = services.find((service3) => !validServices.has(service3));
+  if (invalidService !== void 0) {
+    throw new Error(
+      `Unknown service "${invalidService}"${context6}. Allowed services: ${Array.from(validServices).sort().join(", ")}.`
+    );
+  }
+};
+var validateRuleList = (mode, fieldName, value) => {
+  if (value === void 0) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`Config ${mode}.${String(fieldName)} must be an array of rule IDs.`);
+  }
+  for (const ruleId of value) {
+    if (typeof ruleId !== "string" || ruleId.trim().length === 0) {
+      throw new Error(`Config ${mode}.${String(fieldName)} must contain non-empty rule IDs.`);
+    }
+    const normalizedRuleId = ruleId.trim();
+    const rule = rulesById.get(normalizedRuleId);
+    if (!rule) {
+      throw new Error(`Unknown rule ID "${normalizedRuleId}" in ${mode}.${String(fieldName)}.`);
+    }
+    if (!rule.supports.includes(mode)) {
+      throw new Error(`Rule "${normalizedRuleId}" does not support ${mode} mode.`);
+    }
+  }
+};
+var validateServiceList = (mode, value) => {
+  if (value === void 0) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`Config ${mode}.services must be an array of services.`);
+  }
+  for (const service3 of value) {
+    if (typeof service3 !== "string" || service3.trim().length === 0) {
+      throw new Error(`Config ${mode}.services must contain non-empty services.`);
+    }
+  }
+  assertKnownServices(normalizeServiceList(value) ?? [], servicesByMode[mode], ` in ${mode}.services`);
+};
+var validateServices = (services, mode) => {
+  const normalized = services.map((service3) => service3.toLowerCase());
+  assertKnownServices(
+    normalized,
+    mode === void 0 ? allServices : servicesByMode[mode],
+    mode === void 0 ? "" : ` for ${mode}`
+  );
+  return normalized;
+};
+var validateModeConfig = (mode, config) => {
+  validateRuleList(mode, "enabledRules", config.enabledRules);
+  validateRuleList(mode, "disabledRules", config.disabledRules);
+  validateServiceList(mode, config.services);
+  if (config.format !== void 0 && !supportedFormats.has(config.format)) {
+    throw new Error(`Invalid format "${config.format}" in ${mode}.format.`);
+  }
+  if (config.failOn !== void 0 && !supportedSeverities.has(config.failOn)) {
+    throw new Error(`Invalid severity "${String(config.failOn)}" in ${mode}.fail-on.`);
+  }
+  const enabledRules = normalizeRuleList(config.enabledRules);
+  const disabledRules = normalizeRuleList(config.disabledRules);
+  const services = normalizeServiceList(config.services);
+  if (enabledRules && disabledRules) {
+    const disabledRuleIds = new Set(disabledRules);
+    const conflictingRuleId = enabledRules.find((ruleId) => disabledRuleIds.has(ruleId));
+    if (conflictingRuleId) {
+      throw new Error(`Rule "${conflictingRuleId}" cannot appear in both enabled-rules and disabled-rules.`);
+    }
+  }
+  return {
+    disabledRules,
+    enabledRules,
+    failOn: config.failOn,
+    format: config.format,
+    services
+  };
+};
+var validateConfig = (config) => ({
+  discovery: validateModeConfig("discovery", config.discovery),
+  iac: validateModeConfig("iac", config.iac)
+});
+
+// ../sdk/src/errors.ts
+init_errors();
+var redactErrorMessage = (message3) => message3.replace(/169\.254\.169\.254/g, "[redacted-host]").replace(/fd00:ec2::254/gi, "[redacted-host]").replace(/(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/gi, "$1[redacted-auth]@").replace(
+  /([?&](?:access_token|authorization|token|x-amz-security-token|x-amz-signature|signature)=)[^&\s]+/gi,
+  "$1[redacted]"
+).replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, "$1[redacted]");
+var categorizeError = (err) => {
+  if (!(err instanceof Error)) {
+    return { code: "RUNTIME_ERROR", message: "An unexpected error occurred." };
+  }
+  const code = "code" in err && typeof err.code === "string" ? err.code : void 0;
+  const message3 = redactErrorMessage(err.message).trim();
+  if (err.name === "CredentialsProviderError" || err.name === "ExpiredTokenException" || code === "CredentialsProviderError" || code === "ExpiredTokenException") {
+    return {
+      code: "CREDENTIALS_ERROR",
+      message: "AWS credentials not found or expired. Run 'aws sts get-caller-identity' to verify your session."
+    };
+  }
+  if (err.name.includes("AccessDenied") || code?.includes("AccessDenied") === true) {
+    return {
+      code: "ACCESS_DENIED",
+      message: message3 || "Insufficient AWS permissions. Check your IAM role or policy."
+    };
+  }
+  if (code === "ENOENT") {
+    return { code: "PATH_NOT_FOUND", message: `Path not found: ${err.path ?? "unknown"}` };
+  }
+  if (code !== void 0 && isAwsDiscoveryErrorCode(code)) {
+    return { code, message: message3 || "AWS Resource Explorer discovery failed." };
+  }
+  return { code: "RUNTIME_ERROR", message: message3 || "An unexpected error occurred." };
+};
+
+// ../sdk/src/index.ts
 init_evidence_cache();
+
+// ../sdk/src/findings.ts
+var flattenFindings = (result) => result.providers.flatMap(
+  (providerGroup) => providerGroup.rules.flatMap(
+    (ruleGroup) => ruleGroup.findings.map((finding) => ({
+      provider: providerGroup.provider,
+      ruleId: ruleGroup.ruleId,
+      service: ruleGroup.service,
+      severity: ruleGroup.severity,
+      source: ruleGroup.source,
+      message: ruleGroup.message,
+      finding
+    }))
+  )
+);
 
 // ../sdk/src/parsers/cloudformation.ts
 var import_promises3 = require("node:fs/promises");
@@ -54964,18 +55140,21 @@ var parseIaCWithDiagnostics = async (path, options) => {
 init_src();
 var evaluateScanPolicy = (result, threshold) => {
   const maximumSeverityIndex = threshold === void 0 ? SEVERITIES.length - 1 : SEVERITIES.indexOf(threshold);
-  const qualifyingFindingCount = result.providers.reduce(
-    (total, providerGroup) => total + providerGroup.rules.reduce((providerTotal, ruleGroup) => {
-      const severityIndex = SEVERITIES.indexOf(ruleGroup.severity);
-      return providerTotal + (severityIndex !== -1 && severityIndex <= maximumSeverityIndex ? ruleGroup.findings.length : 0);
-    }, 0),
-    0
-  );
+  const qualifyingFindingCount = flattenFindings(result).filter(({ severity: severity3 }) => {
+    const severityIndex = SEVERITIES.indexOf(severity3);
+    return severityIndex !== -1 && severityIndex <= maximumSeverityIndex;
+  }).length;
   return {
     qualifyingFindingCount,
     ...threshold === void 0 ? {} : { threshold },
     violated: qualifyingFindingCount > 0
   };
+};
+var resolveScanPolicy = (result, controls) => {
+  if (controls.failOn !== void 0) {
+    return evaluateScanPolicy(result, controls.failOn);
+  }
+  return controls.exitCode === true ? evaluateScanPolicy(result) : result.policy ?? { qualifyingFindingCount: 0, violated: false };
 };
 
 // ../sdk/src/index.ts
@@ -54993,93 +55172,6 @@ var defaultConfig = {
   discovery: {},
   iac: {}
 };
-
-// ../sdk/src/config/validate.ts
-init_src();
-init_built_in_rules();
-var supportedFormats = /* @__PURE__ */ new Set(["json", "table"]);
-var supportedSeverities = new Set(SEVERITIES);
-var rulesById = new Map(builtInRuleMetadata.map((rule) => [rule.id, rule]));
-var servicesByMode = {
-  discovery: new Set(
-    builtInRuleMetadata.filter((rule) => rule.supports.includes("discovery")).map((rule) => rule.service)
-  ),
-  iac: new Set(builtInRuleMetadata.filter((rule) => rule.supports.includes("iac")).map((rule) => rule.service))
-};
-var normalizeRuleList = (value) => value?.map((ruleId) => ruleId.trim());
-var normalizeServiceList = (value) => value?.map((service3) => service3.trim().toLowerCase());
-var validateRuleList = (mode, fieldName, value) => {
-  if (value === void 0) {
-    return;
-  }
-  if (!Array.isArray(value)) {
-    throw new Error(`Config ${mode}.${String(fieldName)} must be an array of rule IDs.`);
-  }
-  for (const ruleId of value) {
-    if (typeof ruleId !== "string" || ruleId.trim().length === 0) {
-      throw new Error(`Config ${mode}.${String(fieldName)} must contain non-empty rule IDs.`);
-    }
-    const normalizedRuleId = ruleId.trim();
-    const rule = rulesById.get(normalizedRuleId);
-    if (!rule) {
-      throw new Error(`Unknown rule ID "${normalizedRuleId}" in ${mode}.${String(fieldName)}.`);
-    }
-    if (!rule.supports.includes(mode)) {
-      throw new Error(`Rule "${normalizedRuleId}" does not support ${mode} mode.`);
-    }
-  }
-};
-var validateServiceList = (mode, value) => {
-  if (value === void 0) {
-    return;
-  }
-  if (!Array.isArray(value)) {
-    throw new Error(`Config ${mode}.services must be an array of services.`);
-  }
-  for (const service3 of value) {
-    if (typeof service3 !== "string" || service3.trim().length === 0) {
-      throw new Error(`Config ${mode}.services must contain non-empty services.`);
-    }
-    const normalizedService = service3.trim().toLowerCase();
-    if (!servicesByMode[mode].has(normalizedService)) {
-      throw new Error(
-        `Unknown service "${normalizedService}" in ${mode}.services. Allowed services: ${Array.from(servicesByMode[mode]).sort().join(", ")}.`
-      );
-    }
-  }
-};
-var validateModeConfig = (mode, config) => {
-  validateRuleList(mode, "enabledRules", config.enabledRules);
-  validateRuleList(mode, "disabledRules", config.disabledRules);
-  validateServiceList(mode, config.services);
-  if (config.format !== void 0 && !supportedFormats.has(config.format)) {
-    throw new Error(`Invalid format "${config.format}" in ${mode}.format.`);
-  }
-  if (config.failOn !== void 0 && !supportedSeverities.has(config.failOn)) {
-    throw new Error(`Invalid severity "${String(config.failOn)}" in ${mode}.fail-on.`);
-  }
-  const enabledRules = normalizeRuleList(config.enabledRules);
-  const disabledRules = normalizeRuleList(config.disabledRules);
-  const services = normalizeServiceList(config.services);
-  if (enabledRules && disabledRules) {
-    const disabledRuleIds = new Set(disabledRules);
-    const conflictingRuleId = enabledRules.find((ruleId) => disabledRuleIds.has(ruleId));
-    if (conflictingRuleId) {
-      throw new Error(`Rule "${conflictingRuleId}" cannot appear in both enabled-rules and disabled-rules.`);
-    }
-  }
-  return {
-    disabledRules,
-    enabledRules,
-    failOn: config.failOn,
-    format: config.format,
-    services
-  };
-};
-var validateConfig = (config) => ({
-  discovery: validateModeConfig("discovery", config.discovery),
-  iac: validateModeConfig("iac", config.iac)
-});
 
 // ../sdk/src/config/merge.ts
 var mergeModeConfig = (baseConfig, overrides) => ({
@@ -56377,15 +56469,15 @@ var findSuppressionEntry = (lookup, path, resourceId) => {
   return qualifierIndex === -1 ? void 0 : lookup.get(toSuppressionKey(path, resourceId.slice(0, qualifierIndex)));
 };
 var runStaticScan = async (path, config) => {
-  const registry = buildRuleRegistry(config, "iac");
+  const activeRules = buildRuleRegistry(config, "iac");
   const { diagnostics, suppressionTargets, evaluationScopes, ...staticContext } = await loadAwsStaticResources(
     path,
-    registry.activeRules
+    activeRules
   );
   const suppressionLookup = buildSuppressionLookup(suppressionTargets);
   const suppressed = [];
   const findings = groupFindingsByProvider(
-    registry.activeRules.map((rule) => {
+    activeRules.map((rule) => {
       if (!rule.supports.includes("iac") || !rule.evaluateStatic) {
         return {
           provider: rule.provider,
@@ -56680,42 +56772,6 @@ ${COMMENT_MARKER}`;
   return "created";
 };
 
-// src/error.ts
-var sanitizeRuntimeErrorMessage = (message3) => message3.replace(/169\.254\.169\.254/g, "[redacted-host]").replace(/fd00:ec2::254/gi, "[redacted-host]").replace(/(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/gi, "$1[redacted-auth]@").replace(
-  /([?&](?:access_token|authorization|token|x-amz-security-token|x-amz-signature|signature)=)[^&\s]+/gi,
-  "$1[redacted]"
-).replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, "$1[redacted]");
-var formatError = (err) => {
-  const envelope = { error: categorize(err) };
-  return JSON.stringify(envelope, null, 2);
-};
-var categorize = (err) => {
-  if (!(err instanceof Error)) {
-    return { code: "RUNTIME_ERROR", message: "An unexpected error occurred." };
-  }
-  if (err.code === "ENOENT") {
-    const path = err.path ?? "unknown";
-    return { code: "PATH_NOT_FOUND", message: `Path not found: ${path}` };
-  }
-  const sanitizedMessage = sanitizeRuntimeErrorMessage(err.message).trim();
-  return {
-    code: "RUNTIME_ERROR",
-    message: sanitizedMessage || "An unexpected error occurred."
-  };
-};
-
-// src/findings.ts
-var flattenFindings = (result) => result.providers.flatMap(
-  (providerGroup) => providerGroup.rules.flatMap(
-    (ruleGroup) => ruleGroup.findings.map((finding) => ({
-      ruleId: ruleGroup.ruleId,
-      severity: ruleGroup.severity,
-      message: ruleGroup.message,
-      finding
-    }))
-  )
-);
-
 // src/inputs.ts
 var optionalInput = (name) => {
   const value = getInput(name);
@@ -56736,19 +56792,6 @@ var parseSeverity = (value) => {
   }
   return severity3;
 };
-var parseIaCServiceList = (value) => {
-  const services = parseCommaSeparatedList(value, "service").map((service3) => service3.toLowerCase());
-  const validServices = new Set(
-    builtInRuleMetadata.filter((rule) => rule.supports.includes("iac")).map((rule) => rule.service)
-  );
-  const invalidService = services.find((service3) => !validServices.has(service3));
-  if (invalidService) {
-    throw new Error(
-      `Unknown service "${invalidService}" for iac. Allowed services: ${Array.from(validServices).sort().join(", ")}.`
-    );
-  }
-  return services;
-};
 var getInputs = () => {
   const enabledRules = optionalInput("enabled-rules");
   const disabledRules = optionalInput("disabled-rules");
@@ -56761,7 +56804,7 @@ var getInputs = () => {
     iac.disabledRules = parseCommaSeparatedList(disabledRules, "rule ID");
   }
   if (service3 !== void 0) {
-    iac.services = parseIaCServiceList(service3);
+    iac.services = validateServices(parseCommaSeparatedList(service3, "service"), "iac");
   }
   const failOn = optionalInput("fail-on");
   return {
@@ -56778,9 +56821,9 @@ var getInputs = () => {
 };
 
 // src/version.ts
-var ACTION_VERSION = "1.0.3";
-var SDK_VERSION = "0.37.3";
-var RULES_VERSION = "0.34.2";
+var ACTION_VERSION = "1.0.4";
+var SDK_VERSION = "0.38.0";
+var RULES_VERSION = "0.35.0";
 
 // src/markdown.ts
 var escapeCell = (value) => value.replace(/\\/g, "\\\\").replace(/[[\]<>|]/g, "\\$&").replace(/\r\n?|\n/g, " ");
@@ -56840,16 +56883,8 @@ ${rows.join("\n")}`);
   return parts.join("\n\n");
 };
 
-// src/policy.ts
-var resolvePolicy = (result, inputs) => {
-  if (inputs.failOn !== void 0) {
-    return evaluateScanPolicy(result, inputs.failOn);
-  }
-  return inputs.exitCode ? evaluateScanPolicy(result) : result.policy ?? { qualifyingFindingCount: 0, violated: false };
-};
-var failureSummary = (policy) => policy.threshold === void 0 ? `CloudBurn scan failed: ${policy.qualifyingFindingCount} finding(s) detected.` : `CloudBurn scan failed: ${policy.qualifyingFindingCount} finding(s) at or above ${policy.threshold} severity.`;
-
 // src/index.ts
+var failureSummary = (policy) => policy.threshold === void 0 ? `CloudBurn scan failed: ${policy.qualifyingFindingCount} finding(s) detected.` : `CloudBurn scan failed: ${policy.qualifyingFindingCount} finding(s) at or above ${policy.threshold} severity.`;
 var resultFilePath = () => (0, import_node_path9.join)(process.env.RUNNER_TEMP ?? (0, import_node_os2.tmpdir)(), `cloudburn-scan-${process.pid}.json`);
 var maybePostComment = async (inputs, body) => {
   if (!inputs.comment) {
@@ -56906,7 +56941,7 @@ var run = async () => {
     const emitted = emitAnnotations(findings, { workspace, scanRoot });
     info(`Emitted ${emitted} annotation${emitted === 1 ? "" : "s"}.`);
   }
-  const policy = resolvePolicy(result, inputs);
+  const policy = resolveScanPolicy(result, inputs);
   setOutput("failed", policy.violated);
   await maybePostComment(inputs, markdown);
   if (policy.violated) {
@@ -56916,7 +56951,7 @@ var run = async () => {
   }
 };
 run().catch((err) => {
-  setFailed(formatError(err));
+  setFailed(JSON.stringify({ error: categorizeError(err) }, null, 2));
 });
 /*! Bundled license information:
 
