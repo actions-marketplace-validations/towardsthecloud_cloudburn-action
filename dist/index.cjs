@@ -19741,7 +19741,7 @@ var require_lib = __commonJS({
 });
 
 // ../rules/src/shared/helpers.ts
-var createRule, createFindingMatch, createLiveEvaluationCoverage, isRecord, createFinding, getAwsResourceScopeKey;
+var createRule, createFindingMatch, createLiveEvaluationCoverage, getLiveEvaluationIndex, isRecord, createFinding, getAwsResourceScopeKey;
 var init_helpers = __esm({
   "../rules/src/shared/helpers.ts"() {
     "use strict";
@@ -19759,6 +19759,14 @@ var init_helpers = __esm({
       }
       return coverage;
     };
+    getLiveEvaluationIndex = (context6, build) => {
+      const { scratch } = context6;
+      if (!scratch) return build(context6.resources);
+      if (scratch.has(build)) return scratch.get(build);
+      const index = build(context6.resources);
+      scratch.set(build, index);
+      return index;
+    };
     isRecord = (value) => typeof value === "object" && value !== null;
     createFinding = (rule, source, findings) => findings.length > 0 ? {
       ruleId: rule.id,
@@ -19768,7 +19776,7 @@ var init_helpers = __esm({
       message: rule.message,
       findings
     } : null;
-    getAwsResourceScopeKey = (accountId, region, resourceId) => JSON.stringify([accountId, region, resourceId]);
+    getAwsResourceScopeKey = (accountId, region, resourceId) => `${accountId}\0${region}\0${resourceId}`;
   }
 });
 
@@ -21246,7 +21254,7 @@ var init_dynamodb = __esm({
 });
 
 // ../rules/src/aws/ebs/attached-to-stopped-instances.ts
-var RULE_ID20, RULE_SERVICE20, RULE_SEVERITY20, RULE_MESSAGE20, toInstanceStateById, resolveAttachedInstanceStates, isStopped, ebsAttachedToStoppedInstancesRule;
+var RULE_ID20, RULE_SERVICE20, RULE_SEVERITY20, RULE_MESSAGE20, toInstanceStateById, indexInstanceStateById, resolveAttachedInstanceStates, isStopped, ebsAttachedToStoppedInstancesRule;
 var init_attached_to_stopped_instances = __esm({
   "../rules/src/aws/ebs/attached-to-stopped-instances.ts"() {
     "use strict";
@@ -21260,6 +21268,7 @@ var init_attached_to_stopped_instances = __esm({
         (instance) => instance.state === void 0 ? [] : [[instance.instanceId, instance.state]]
       )
     );
+    indexInstanceStateById = (resources) => toInstanceStateById(resources.get("aws-ec2-instances"));
     resolveAttachedInstanceStates = (volume, instanceStateById) => {
       const attachments = volume.attachments ?? [];
       if (attachments.length === 0) {
@@ -21283,8 +21292,9 @@ var init_attached_to_stopped_instances = __esm({
       // Unattached volumes are outside this policy and count as assessed, and one attached instance that is known not to
       // be stopped settles the verdict. Otherwise an attachment without an instance ID, an instance missing from the
       // inventory, or an instance with no reported state leaves the volume unknown instead of passing.
-      getLiveEvaluationCoverage: ({ resources }) => {
-        const instanceStateById = toInstanceStateById(resources.get("aws-ec2-instances"));
+      getLiveEvaluationCoverage: (context6) => {
+        const instanceStateById = getLiveEvaluationIndex(context6, indexInstanceStateById);
+        const { resources } = context6;
         return createLiveEvaluationCoverage(
           resources.get("aws-ebs-volumes"),
           (volume) => {
@@ -21294,8 +21304,9 @@ var init_attached_to_stopped_instances = __esm({
           (volume) => createFindingMatch(volume.volumeId, volume.region, volume.accountId)
         );
       },
-      evaluateLive: ({ resources }) => {
-        const instanceStateById = toInstanceStateById(resources.get("aws-ec2-instances"));
+      evaluateLive: (context6) => {
+        const instanceStateById = getLiveEvaluationIndex(context6, indexInstanceStateById);
+        const { resources } = context6;
         const findings = resources.get("aws-ebs-volumes").filter((volume) => {
           const states = resolveAttachedInstanceStates(volume, instanceStateById);
           return states?.every(isStopped) ?? false;
@@ -23404,7 +23415,7 @@ var init_gateway_without_targets = __esm({
 });
 
 // ../rules/src/aws/elb/idle.ts
-var RULE_ID56, RULE_SERVICE56, RULE_SEVERITY56, RULE_MESSAGE56, supportsHttpRequestActivity, elbIdleRule;
+var RULE_ID56, RULE_SERVICE56, RULE_SEVERITY56, RULE_MESSAGE56, supportsHttpRequestActivity, indexTargetCountByArn, elbIdleRule;
 var init_idle = __esm({
   "../rules/src/aws/elb/idle.ts"() {
     "use strict";
@@ -23415,6 +23426,7 @@ var init_idle = __esm({
     RULE_SEVERITY56 = "medium";
     RULE_MESSAGE56 = "Load balancers with consistently low request volume should be reviewed for cleanup.";
     supportsHttpRequestActivity = (loadBalancer) => loadBalancer.loadBalancerType === "application" || loadBalancer.loadBalancerType === "classic" && (loadBalancer.listenerProtocols?.length ?? 0) > 0 && loadBalancer.listenerProtocols?.every((protocol) => protocol === "HTTP" || protocol === "HTTPS") === true;
+    indexTargetCountByArn = (resources) => getTargetCountByArn(resources.get("aws-ec2-target-groups"));
     elbIdleRule = createRule({
       severity: RULE_SEVERITY56,
       id: RULE_ID56,
@@ -23425,11 +23437,12 @@ var init_idle = __esm({
       service: RULE_SERVICE56,
       supports: ["discovery"],
       discoveryDependencies: ["aws-ec2-load-balancer-request-activity", "aws-ec2-load-balancers", "aws-ec2-target-groups"],
-      getLiveEvaluationCoverage: ({ resources }) => {
+      getLiveEvaluationCoverage: (context6) => {
+        const { resources } = context6;
         const activityByArn = new Map(
           resources.get("aws-ec2-load-balancer-request-activity").map((activity) => [activity.loadBalancerArn, activity])
         );
-        const targetCountByArn = getTargetCountByArn(resources.get("aws-ec2-target-groups"));
+        const targetCountByArn = getLiveEvaluationIndex(context6, indexTargetCountByArn);
         return createLiveEvaluationCoverage(
           resources.get("aws-ec2-load-balancers"),
           (loadBalancer) => {
@@ -23440,9 +23453,10 @@ var init_idle = __esm({
           (loadBalancer) => createFindingMatch(loadBalancer.loadBalancerArn, loadBalancer.region, loadBalancer.accountId)
         );
       },
-      evaluateLive: ({ resources }) => {
+      evaluateLive: (context6) => {
+        const { resources } = context6;
         const loadBalancers = resources.get("aws-ec2-load-balancers");
-        const targetCountByArn = getTargetCountByArn(resources.get("aws-ec2-target-groups"));
+        const targetCountByArn = getLiveEvaluationIndex(context6, indexTargetCountByArn);
         const loadBalancerByArn = new Map(
           loadBalancers.map((loadBalancer) => [loadBalancer.loadBalancerArn, loadBalancer])
         );
@@ -23781,7 +23795,7 @@ var init_cost_optimal_architecture = __esm({
 });
 
 // ../rules/src/aws/lambda/excessive-timeout.ts
-var RULE_ID63, RULE_SERVICE63, RULE_SEVERITY63, RULE_MESSAGE63, MIN_TIMEOUT_REVIEW_SECONDS, EXCESSIVE_TIMEOUT_RATIO, getFunctionKey, lambdaExcessiveTimeoutRule;
+var RULE_ID63, RULE_SERVICE63, RULE_SEVERITY63, RULE_MESSAGE63, MIN_TIMEOUT_REVIEW_SECONDS, EXCESSIVE_TIMEOUT_RATIO, getFunctionKey, indexMetricsByFunctionKey, lambdaExcessiveTimeoutRule;
 var init_excessive_timeout = __esm({
   "../rules/src/aws/lambda/excessive-timeout.ts"() {
     "use strict";
@@ -23793,6 +23807,9 @@ var init_excessive_timeout = __esm({
     MIN_TIMEOUT_REVIEW_SECONDS = 30;
     EXCESSIVE_TIMEOUT_RATIO = 5;
     getFunctionKey = (accountId, region, functionName) => `${accountId}:${region}:${functionName}`;
+    indexMetricsByFunctionKey = (resources) => new Map(
+      resources.get("aws-lambda-function-metrics").map((metric) => [getFunctionKey(metric.accountId, metric.region, metric.functionName), metric])
+    );
     lambdaExcessiveTimeoutRule = createRule({
       severity: RULE_SEVERITY63,
       id: RULE_ID63,
@@ -23803,20 +23820,18 @@ var init_excessive_timeout = __esm({
       service: RULE_SERVICE63,
       supports: ["discovery"],
       discoveryDependencies: ["aws-lambda-functions", "aws-lambda-function-metrics"],
-      getLiveEvaluationCoverage: ({ resources }) => {
-        const metricsByFunctionKey = new Map(
-          resources.get("aws-lambda-function-metrics").map((metric) => [getFunctionKey(metric.accountId, metric.region, metric.functionName), metric])
-        );
+      getLiveEvaluationCoverage: (context6) => {
+        const metricsByFunctionKey = getLiveEvaluationIndex(context6, indexMetricsByFunctionKey);
+        const { resources } = context6;
         return createLiveEvaluationCoverage(
           resources.get("aws-lambda-functions"),
           (fn) => fn.timeoutSeconds < MIN_TIMEOUT_REVIEW_SECONDS || metricsByFunctionKey.get(getFunctionKey(fn.accountId, fn.region, fn.functionName))?.averageDurationMsLast7Days != null,
           (fn) => createFindingMatch(fn.functionName, fn.region, fn.accountId)
         );
       },
-      evaluateLive: ({ resources }) => {
-        const metricsByFunctionKey = new Map(
-          resources.get("aws-lambda-function-metrics").map((metric) => [getFunctionKey(metric.accountId, metric.region, metric.functionName), metric])
-        );
+      evaluateLive: (context6) => {
+        const metricsByFunctionKey = getLiveEvaluationIndex(context6, indexMetricsByFunctionKey);
+        const { resources } = context6;
         const findings = resources.get("aws-lambda-functions").filter((fn) => {
           const metric = metricsByFunctionKey.get(getFunctionKey(fn.accountId, fn.region, fn.functionName));
           return fn.timeoutSeconds >= MIN_TIMEOUT_REVIEW_SECONDS && metric?.averageDurationMsLast7Days !== null && metric?.averageDurationMsLast7Days !== void 0 && metric.averageDurationMsLast7Days > 0 && fn.timeoutSeconds * 1e3 >= metric.averageDurationMsLast7Days * EXCESSIVE_TIMEOUT_RATIO;
@@ -23832,7 +23847,7 @@ var init_excessive_timeout = __esm({
 });
 
 // ../rules/src/aws/lambda/high-error-rate.ts
-var RULE_ID64, RULE_SERVICE64, RULE_SEVERITY64, RULE_MESSAGE64, HIGH_ERROR_RATE_THRESHOLD, getFunctionKey2, lambdaHighErrorRateRule;
+var RULE_ID64, RULE_SERVICE64, RULE_SEVERITY64, RULE_MESSAGE64, HIGH_ERROR_RATE_THRESHOLD, getFunctionKey2, indexMetricsByFunctionKey2, lambdaHighErrorRateRule;
 var init_high_error_rate = __esm({
   "../rules/src/aws/lambda/high-error-rate.ts"() {
     "use strict";
@@ -23843,6 +23858,9 @@ var init_high_error_rate = __esm({
     RULE_MESSAGE64 = "Lambda functions should not sustain an error rate above 10% over the last 7 days.";
     HIGH_ERROR_RATE_THRESHOLD = 0.1;
     getFunctionKey2 = (accountId, region, functionName) => `${accountId}:${region}:${functionName}`;
+    indexMetricsByFunctionKey2 = (resources) => new Map(
+      resources.get("aws-lambda-function-metrics").map((metric) => [getFunctionKey2(metric.accountId, metric.region, metric.functionName), metric])
+    );
     lambdaHighErrorRateRule = createRule({
       severity: RULE_SEVERITY64,
       id: RULE_ID64,
@@ -23853,10 +23871,9 @@ var init_high_error_rate = __esm({
       service: RULE_SERVICE64,
       supports: ["discovery"],
       discoveryDependencies: ["aws-lambda-functions", "aws-lambda-function-metrics"],
-      getLiveEvaluationCoverage: ({ resources }) => {
-        const metricsByFunctionKey = new Map(
-          resources.get("aws-lambda-function-metrics").map((metric) => [getFunctionKey2(metric.accountId, metric.region, metric.functionName), metric])
-        );
+      getLiveEvaluationCoverage: (context6) => {
+        const metricsByFunctionKey = getLiveEvaluationIndex(context6, indexMetricsByFunctionKey2);
+        const { resources } = context6;
         return createLiveEvaluationCoverage(
           resources.get("aws-lambda-functions"),
           (fn) => {
@@ -23866,10 +23883,9 @@ var init_high_error_rate = __esm({
           (fn) => createFindingMatch(fn.functionName, fn.region, fn.accountId)
         );
       },
-      evaluateLive: ({ resources }) => {
-        const metricsByFunctionKey = new Map(
-          resources.get("aws-lambda-function-metrics").map((metric) => [getFunctionKey2(metric.accountId, metric.region, metric.functionName), metric])
-        );
+      evaluateLive: (context6) => {
+        const metricsByFunctionKey = getLiveEvaluationIndex(context6, indexMetricsByFunctionKey2);
+        const { resources } = context6;
         const findings = resources.get("aws-lambda-functions").filter((fn) => {
           const metric = metricsByFunctionKey.get(getFunctionKey2(fn.accountId, fn.region, fn.functionName));
           return metric?.totalInvocationsLast7Days !== null && metric?.totalInvocationsLast7Days !== void 0 && metric.totalInvocationsLast7Days > 0 && metric.totalErrorsLast7Days !== null && metric.totalErrorsLast7Days !== void 0 && metric.totalErrorsLast7Days / metric.totalInvocationsLast7Days > HIGH_ERROR_RATE_THRESHOLD;
@@ -25807,7 +25823,7 @@ var init_errors = __esm({
 });
 
 // ../sdk/src/evidence-cache.ts
-var import_node_crypto, import_node_fs, import_node_path, import_promises, hash, encode, decode, serialize, inspect, createMemoryEvidenceCacheStore, createLocalEvidenceCacheStore, directoryFlights, storeFlights, waitForFlight, createEvidenceCache;
+var import_node_crypto, import_node_fs, import_node_path, import_promises, hash, encode, decode, serialize, inspect, createMemoryEvidenceCacheStore, localDatabases, createLocalEvidenceCacheStore, directoryFlights, storeFlights, waitForFlight, createEvidenceCache;
 var init_evidence_cache = __esm({
   "../sdk/src/evidence-cache.ts"() {
     "use strict";
@@ -25885,52 +25901,97 @@ var init_evidence_cache = __esm({
         }
       };
     };
+    localDatabases = /* @__PURE__ */ new Map();
     createLocalEvidenceCacheStore = (directory) => {
       const filename = (0, import_node_path.join)((0, import_node_path.resolve)(directory), "evidence.sqlite");
+      const databaseState = localDatabases.get(filename) ?? { schemaReady: false };
+      localDatabases.set(filename, databaseState);
+      const sqlite = import("node:sqlite");
+      const open2 = (DatabaseSyncCtor) => {
+        let opened;
+        try {
+          (0, import_node_fs.mkdirSync)(directory, { recursive: true, mode: 448 });
+          (0, import_node_fs.chmodSync)(directory, 448);
+          if ((0, import_node_fs.lstatSync)(filename, { throwIfNoEntry: false })?.isSymbolicLink())
+            throw new Error("Evidence database must not be a symbolic link");
+          opened = new DatabaseSyncCtor(filename, { timeout: 0 });
+          (0, import_node_fs.chmodSync)(filename, 384);
+          opened.exec("PRAGMA auto_vacuum = FULL");
+          const stats = (0, import_node_fs.lstatSync)(filename);
+          databaseState.database = opened;
+          databaseState.identity = { dev: stats.dev, ino: stats.ino };
+          databaseState.schemaReady = false;
+          return opened;
+        } catch (error2) {
+          try {
+            opened?.close();
+          } finally {
+            databaseState.database = void 0;
+            databaseState.identity = void 0;
+            databaseState.schemaReady = false;
+          }
+          throw error2;
+        }
+      };
       const transaction = async (apply, signal) => {
-        const { DatabaseSync: DatabaseSync2 } = await import("node:sqlite");
+        const { DatabaseSync: DatabaseSync2 } = await sqlite;
         const started = performance.now();
         while (true) {
           signal?.throwIfAborted();
-          let database;
           try {
-            (0, import_node_fs.mkdirSync)(directory, { recursive: true, mode: 448 });
-            (0, import_node_fs.chmodSync)(directory, 448);
-            if ((0, import_node_fs.lstatSync)(filename, { throwIfNoEntry: false })?.isSymbolicLink())
-              throw new Error("Evidence database must not be a symbolic link");
-            database = new DatabaseSync2(filename, { timeout: 0 });
-            (0, import_node_fs.chmodSync)(filename, 384);
-            database.exec("PRAGMA auto_vacuum = FULL");
-            database.exec("BEGIN IMMEDIATE");
-            database.exec(
-              "CREATE TABLE IF NOT EXISTS evidence_v1 (key TEXT PRIMARY KEY, state TEXT NOT NULL, accessed INTEGER NOT NULL, bytes INTEGER NOT NULL, lease_until INTEGER NOT NULL)"
-            );
+            if (!databaseState.database) open2(DatabaseSync2);
+            else {
+              const stats = (0, import_node_fs.lstatSync)(filename, { throwIfNoEntry: false });
+              if (!stats || stats.isSymbolicLink() || !databaseState.identity || stats.dev !== databaseState.identity.dev || stats.ino !== databaseState.identity.ino) {
+                try {
+                  databaseState.database.close();
+                } finally {
+                  databaseState.database = void 0;
+                  databaseState.identity = void 0;
+                  databaseState.schemaReady = false;
+                }
+                open2(DatabaseSync2);
+              }
+            }
+            const currentDatabase = databaseState.database;
+            if (!currentDatabase) throw new Error("Evidence database failed to open");
+            currentDatabase.exec("BEGIN IMMEDIATE");
+            if (!databaseState.schemaReady)
+              currentDatabase.exec(
+                "CREATE TABLE IF NOT EXISTS evidence_v1 (key TEXT PRIMARY KEY, state TEXT NOT NULL, accessed INTEGER NOT NULL, bytes INTEGER NOT NULL, lease_until INTEGER NOT NULL)"
+              );
             signal?.throwIfAborted();
-            const result = apply(database);
+            const result = apply(currentDatabase);
             signal?.throwIfAborted();
-            database.exec("COMMIT");
+            currentDatabase.exec("COMMIT");
+            databaseState.schemaReady = true;
             return result;
           } catch (error2) {
             signal?.throwIfAborted();
             if (!(error2 instanceof Error && "errcode" in error2 && typeof error2.errcode === "number" && (error2.errcode & 255) === 5) || performance.now() - started >= 5e3)
               throw error2;
           } finally {
-            try {
-              if (database?.isTransaction) database.exec("ROLLBACK");
-            } finally {
-              database?.close();
-            }
+            if (databaseState.database?.isTransaction) databaseState.database.exec("ROLLBACK");
           }
           await (0, import_promises.setTimeout)(10, void 0, { signal });
         }
       };
+      const sameStoredState = (a, b) => {
+        const sameLease = a.lease === void 0 ? b.lease === void 0 : b.lease !== void 0 && a.lease.token === b.lease.token && a.lease.expiresAt === b.lease.expiresAt;
+        return a.entry === b.entry && a.invalidated === b.invalidated && sameLease;
+      };
       return {
         update: (key, transition, signal) => transaction((database) => {
-          const row = database.prepare("SELECT state FROM evidence_v1 WHERE key = ?").get(key);
-          const current = row ? JSON.parse(row.state) : void 0;
+          const row = database.prepare("SELECT state, accessed FROM evidence_v1 WHERE key = ?").get(key);
+          const current = row ? { ...JSON.parse(row.state), accessedAt: Number(row.accessed) } : void 0;
           const next = transition(current);
           if (!next.state.entry && !next.state.lease) {
             database.prepare("DELETE FROM evidence_v1 WHERE key = ?").run(key);
+            return next.value;
+          }
+          if (current && sameStoredState(next.state, current)) {
+            if (next.state.accessedAt !== current.accessedAt)
+              database.prepare("UPDATE evidence_v1 SET accessed = ? WHERE key = ?").run(next.state.accessedAt, key);
             return next.value;
           }
           database.prepare(
@@ -37570,7 +37631,7 @@ var init_request_policy = __esm({
 });
 
 // ../sdk/src/providers/aws/request-store.ts
-var import_node_crypto2, import_node_fs2, import_node_os, import_node_path7, import_node_sqlite, import_promises6, createMemoryAwsRequestStore, localStateError, initializeDirectory, mayContainState, initializeTemporaryDirectory, initializeDefaultDirectory, createLocalAwsRequestStore;
+var import_node_crypto2, import_node_fs2, import_node_os, import_node_path7, import_node_sqlite, import_promises6, createMemoryAwsRequestStore, localStateError, initializeDirectory, mayContainState, initializeTemporaryDirectory, initializeDefaultDirectory, MAX_OPEN_DATABASES, createLocalAwsRequestStore;
 var init_request_store = __esm({
   "../sdk/src/providers/aws/request-store.ts"() {
     "use strict";
@@ -37652,9 +37713,23 @@ var init_request_store = __esm({
       initializeTemporaryDirectory(fallback, uid);
       return fallback;
     };
+    MAX_OPEN_DATABASES = 32;
     createLocalAwsRequestStore = (directory) => {
       let selectedDirectory = directory ?? process.env.CLOUDBURN_AWS_ADMISSION_DIR;
       const primary = selectedDirectory ?? (0, import_node_path7.join)(process.env.XDG_CACHE_HOME || (0, import_node_path7.join)((0, import_node_os.homedir)(), ".cache"), "cloudburn", "aws-admission-v1");
+      const handles = /* @__PURE__ */ new Map();
+      const evict = (filename, handle) => {
+        if (handles.get(filename) === handle) handles.delete(filename);
+        handle.database.close();
+      };
+      const remember = (filename, handle) => {
+        handles.delete(filename);
+        handles.set(filename, handle);
+        while (handles.size > MAX_OPEN_DATABASES) {
+          const oldest = handles.entries().next().value;
+          evict(oldest[0], oldest[1]);
+        }
+      };
       return {
         update: async (key, update, signal, options) => {
           signal?.throwIfAborted();
@@ -37667,31 +37742,65 @@ var init_request_store = __esm({
           }
           const directory2 = selectedDirectory;
           const filename = (0, import_node_path7.join)(directory2, `${(0, import_node_crypto2.createHash)("sha256").update(key).digest("hex")}.sqlite`);
+          let filenameStat;
           try {
             initializeDirectory(directory2);
-            if ((0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false })?.isSymbolicLink()) {
+            filenameStat = (0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false });
+            if (filenameStat?.isSymbolicLink()) {
               throw new Error("The local AWS admission database must not be a symbolic link");
             }
           } catch (error2) {
             throw localStateError(directory2, error2);
           }
           const startedAt = performance.now();
+          let firstAttempt = true;
           while (true) {
             signal?.throwIfAborted();
+            if (!firstAttempt) {
+              try {
+                filenameStat = (0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false });
+              } catch (error2) {
+                throw localStateError(directory2, error2);
+              }
+            }
+            firstAttempt = false;
+            let handle = handles.get(filename);
+            if (handle && (filenameStat === void 0 || handle.dev !== filenameStat.dev || handle.ino !== filenameStat.ino)) {
+              evict(filename, handle);
+              handle = void 0;
+            }
+            let freshDatabase;
             let database;
             let applyingTransition = false;
+            let evictOnError = false;
             try {
-              database = new import_node_sqlite.DatabaseSync(filename, { timeout: 0 });
-              (0, import_node_fs2.chmodSync)(filename, 384);
+              if (!handle) {
+                try {
+                  freshDatabase = new import_node_sqlite.DatabaseSync(filename, { timeout: 0 });
+                  (0, import_node_fs2.chmodSync)(filename, 384);
+                  const identity = (0, import_node_fs2.lstatSync)(filename);
+                  handle = { database: freshDatabase, dev: identity.dev, ino: identity.ino };
+                  freshDatabase = void 0;
+                  remember(filename, handle);
+                } catch (error2) {
+                  freshDatabase?.close();
+                  throw error2;
+                }
+              } else {
+                remember(filename, handle);
+              }
+              database = handle.database;
               database.exec("BEGIN IMMEDIATE");
-              const version = database.prepare("PRAGMA user_version").get()?.user_version;
+              handle.version ??= database.prepare("PRAGMA user_version");
+              const version = handle.version.get()?.user_version;
               if (version === 0) {
                 database.exec("CREATE TABLE request_state_v1 (id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL)");
                 database.exec("PRAGMA user_version = 1");
               } else if (version !== 1) {
                 throw new Error(`Unsupported local AWS admission state version ${version}`);
               }
-              const row = database.prepare("SELECT state FROM request_state_v1 WHERE id = 1").get();
+              handle.select ??= database.prepare("SELECT state FROM request_state_v1 WHERE id = 1");
+              const row = handle.select.get();
               if (row !== void 0 && typeof row.state !== "string") {
                 throw new Error("Invalid local AWS admission state payload");
               }
@@ -37701,7 +37810,8 @@ var init_request_store = __esm({
               applyingTransition = false;
               signal?.throwIfAborted();
               if (next.state === row?.state) return next.value;
-              database.prepare("INSERT OR REPLACE INTO request_state_v1 (id, state) VALUES (1, ?)").run(next.state);
+              handle.insert ??= database.prepare("INSERT OR REPLACE INTO request_state_v1 (id, state) VALUES (1, ?)");
+              handle.insert.run(next.state);
               signal?.throwIfAborted();
               database.exec("COMMIT");
               return next.value;
@@ -37709,6 +37819,7 @@ var init_request_store = __esm({
               signal?.throwIfAborted();
               if (applyingTransition) throw error2;
               if (!(error2 instanceof Error && "errcode" in error2 && typeof error2.errcode === "number" && (error2.errcode & 255) === 5)) {
+                evictOnError = true;
                 throw localStateError(directory2, error2);
               }
               if (performance.now() - startedAt >= 5e3) {
@@ -37721,7 +37832,7 @@ var init_request_store = __esm({
               try {
                 if (database?.isTransaction) database.exec("ROLLBACK");
               } finally {
-                database?.close();
+                if (handle && (evictOnError || handle.database.isTransaction)) evict(filename, handle);
               }
             }
             try {
@@ -37731,6 +37842,15 @@ var init_request_store = __esm({
               throw error2;
             }
           }
+        },
+        close: () => {
+          for (const [filename, handle] of handles) {
+            try {
+              evict(filename, handle);
+            } catch {
+            }
+          }
+          handles.clear();
         }
       };
     };
@@ -37773,19 +37893,23 @@ var init_request = __esm({
       return value;
     };
     withAwsServiceCallBudget = (fn, options = {}) => {
-      const run2 = () => budgetContext.run(
-        {
-          account: options.resolveAccountId ? void 0 : options.accountId,
-          attribution: { scanId: (0, import_node_crypto3.randomUUID)(), ...options.attribution },
-          onAttempt: options.onAttempt,
-          resolveAccountId: options.resolveAccountId,
-          fallbackId: `unresolved:${(0, import_node_crypto3.randomUUID)()}`,
-          deadline: getAwsExecutionDeadline() ?? Date.now() + 3e5,
-          store: options.store ?? (options.accountId || options.resolveAccountId ? createLocalAwsRequestStore() : createMemoryAwsRequestStore()),
-          overrides: resolveOverrides(options.overrides)
-        },
-        fn
-      );
+      const run2 = () => {
+        const ownedStore = options.store === void 0 && (options.accountId || options.resolveAccountId) ? createLocalAwsRequestStore() : void 0;
+        const settled = budgetContext.run(
+          {
+            account: options.resolveAccountId ? void 0 : options.accountId,
+            attribution: { scanId: (0, import_node_crypto3.randomUUID)(), ...options.attribution },
+            onAttempt: options.onAttempt,
+            resolveAccountId: options.resolveAccountId,
+            fallbackId: `unresolved:${(0, import_node_crypto3.randomUUID)()}`,
+            deadline: getAwsExecutionDeadline() ?? Date.now() + 3e5,
+            store: options.store ?? ownedStore ?? createMemoryAwsRequestStore(),
+            overrides: resolveOverrides(options.overrides)
+          },
+          fn
+        );
+        return ownedStore ? settled.finally(() => ownedStore.close()) : settled;
+      };
       return options.attribution?.dataset && !getAwsRequestDatasetSource() ? withAwsDatasetAttribution(options.attribution.dataset, run2) : run2();
     };
     accountIdFor = async (budget) => {
@@ -39544,13 +39668,14 @@ var init_cloudwatch2 = __esm({
 });
 
 // ../sdk/src/providers/aws/resources/cloudfront.ts
-var import_client_cloudfront2, CLOUDFRONT_DISTRIBUTION_CONCURRENCY, CLOUDFRONT_CONTROL_REGION, THIRTY_DAYS_IN_SECONDS, DAILY_PERIOD_IN_SECONDS, REQUIRED_CLOUDFRONT_DAILY_POINTS, supportedPriceClass, listDistributionSeeds, hydrateAwsCloudFrontDistributions, hydrateAwsCloudFrontDistributionRequestActivity;
+var import_client_cloudfront2, CLOUDFRONT_DISTRIBUTION_CONCURRENCY, CLOUDFRONT_CONTROL_REGION, THIRTY_DAYS_IN_SECONDS, DAILY_PERIOD_IN_SECONDS, REQUIRED_CLOUDFRONT_DAILY_POINTS, supportedPriceClass, listDistributionSeeds, listDistributionSummaries, hydrateAwsCloudFrontDistributions, hydrateAwsCloudFrontDistributionRequestActivity;
 var init_cloudfront2 = __esm({
   "../sdk/src/providers/aws/resources/cloudfront.ts"() {
     "use strict";
     import_client_cloudfront2 = require("@aws-sdk/client-cloudfront");
     init_concurrency();
     init_client();
+    init_errors();
     init_execution();
     init_request();
     init_cloudwatch2();
@@ -39592,22 +39717,50 @@ var init_cloudfront2 = __esm({
       } while (marker);
       return distributions;
     };
+    listDistributionSummaries = async () => {
+      try {
+        return new Map((await listDistributionSeeds()).map((summary2) => [summary2.distributionId, summary2]));
+      } catch (err) {
+        if (isAwsAccessDeniedError(err)) return void 0;
+        throw err;
+      }
+    };
     hydrateAwsCloudFrontDistributions = async (resources, context6) => {
-      const distributionSeeds = resources.length > 0 ? resources.flatMap((resource) => {
-        const distributionId = extractTerminalArnResourceIdentifier(resource.arn);
-        return distributionId ? [
-          {
-            accountId: resource.accountId,
-            distributionArn: resource.arn,
-            distributionId,
-            region: resource.region
-          }
-        ] : [];
-      }) : (([distributions2, accountId]) => distributions2.map((distribution) => ({
-        ...distribution,
-        accountId,
-        region: "global"
-      })))(await Promise.all([listDistributionSeeds(), resolveAwsAccountIdForLoad(context6)]));
+      let distributionSeeds;
+      if (resources.length > 0) {
+        const catalogSeeds = resources.flatMap((resource) => {
+          const distributionId = extractTerminalArnResourceIdentifier(resource.arn);
+          return distributionId ? [
+            {
+              accountId: resource.accountId,
+              distributionArn: resource.arn,
+              distributionId,
+              region: resource.region
+            }
+          ] : [];
+        });
+        const summaries = catalogSeeds.length > 0 ? await listDistributionSummaries() : void 0;
+        distributionSeeds = catalogSeeds.map((seed) => {
+          const summary2 = summaries?.get(seed.distributionId);
+          return summary2 ? {
+            ...summary2,
+            accountId: seed.accountId,
+            distributionArn: seed.distributionArn,
+            distributionId: seed.distributionId,
+            region: seed.region
+          } : seed;
+        });
+      } else {
+        const [distributions2, accountId] = await Promise.all([
+          listDistributionSeeds(),
+          resolveAwsAccountIdForLoad(context6)
+        ]);
+        distributionSeeds = distributions2.map((distribution) => ({
+          ...distribution,
+          accountId,
+          region: "global"
+        }));
+      }
       const uniqueSeeds = [
         ...new Map(distributionSeeds.map((distribution) => [distribution.distributionId, distribution])).values()
       ];
@@ -39826,51 +39979,56 @@ var init_cloudwatch_logs = __esm({
       }
       const hydratedPages = await Promise.all(
         [...resourcesByRegion.entries()].map(async ([region, regionResources]) => {
-          const logStreams = [];
           const client = createCloudWatchLogsClient({ region });
           const desiredLogGroupNames = [
             ...new Set(
               regionResources.map((resource) => extractLogGroupName(resource.arn)).filter((logGroupName) => logGroupName !== null)
             )
           ];
-          for (const logGroupName of desiredLogGroupNames) {
-            let nextToken;
-            do {
-              const response = await runAwsRequest(
-                "Amazon CloudWatch Logs",
-                "DescribeLogStreams",
-                region,
-                () => client.send(
-                  new import_client_cloudwatch_logs2.DescribeLogStreamsCommand({
+          const logStreamsByGroup = await mapWithConcurrency(
+            desiredLogGroupNames,
+            CLOUDWATCH_LOG_GROUP_HYDRATION_CONCURRENCY,
+            async (logGroupName) => {
+              const logStreams = [];
+              let nextToken;
+              do {
+                const response = await runAwsRequest(
+                  "Amazon CloudWatch Logs",
+                  "DescribeLogStreams",
+                  region,
+                  () => client.send(
+                    new import_client_cloudwatch_logs2.DescribeLogStreamsCommand({
+                      logGroupName,
+                      nextToken
+                    })
+                  )
+                );
+                for (const logStream of response.logStreams ?? []) {
+                  if (!logStream.logStreamName || !logStream.arn) {
+                    continue;
+                  }
+                  const accountId = extractAccountIdFromArn(logStream.arn);
+                  if (!accountId) {
+                    continue;
+                  }
+                  logStreams.push({
+                    accountId,
+                    arn: logStream.arn,
+                    creationTime: logStream.creationTime,
+                    firstEventTimestamp: logStream.firstEventTimestamp,
+                    lastEventTimestamp: logStream.lastEventTimestamp,
+                    lastIngestionTime: logStream.lastIngestionTime,
                     logGroupName,
-                    nextToken
-                  })
-                )
-              );
-              for (const logStream of response.logStreams ?? []) {
-                if (!logStream.logStreamName || !logStream.arn) {
-                  continue;
+                    logStreamName: logStream.logStreamName,
+                    region
+                  });
                 }
-                const accountId = extractAccountIdFromArn(logStream.arn);
-                if (!accountId) {
-                  continue;
-                }
-                logStreams.push({
-                  accountId,
-                  arn: logStream.arn,
-                  creationTime: logStream.creationTime,
-                  firstEventTimestamp: logStream.firstEventTimestamp,
-                  lastEventTimestamp: logStream.lastEventTimestamp,
-                  lastIngestionTime: logStream.lastIngestionTime,
-                  logGroupName,
-                  logStreamName: logStream.logStreamName,
-                  region
-                });
-              }
-              nextToken = response.nextToken;
-            } while (nextToken);
-          }
-          return logStreams;
+                nextToken = response.nextToken;
+              } while (nextToken);
+              return logStreams;
+            }
+          );
+          return logStreamsByGroup.flat();
         })
       );
       return hydratedPages.flat().sort((left, right) => left.arn.localeCompare(right.arn));
@@ -43179,14 +43337,16 @@ var init_ecs_cluster_metrics = __esm({
 });
 
 // ../sdk/src/providers/aws/resources/eks.ts
-var import_client_eks2, EKS_NODEGROUP_CONCURRENCY, parseEksClusterResource, hydrateAwsEksNodegroups;
+var import_client_eks2, EKS_CLUSTER_CONCURRENCY, EKS_NODEGROUP_CONCURRENCY, parseEksClusterResource, hydrateAwsEksNodegroups;
 var init_eks2 = __esm({
   "../sdk/src/providers/aws/resources/eks.ts"() {
     "use strict";
     import_client_eks2 = require("@aws-sdk/client-eks");
+    init_concurrency();
     init_client();
     init_request();
     init_utils();
+    EKS_CLUSTER_CONCURRENCY = 3;
     EKS_NODEGROUP_CONCURRENCY = 5;
     parseEksClusterResource = (arn) => {
       const arnSegments = arn.split(":");
@@ -43217,8 +43377,8 @@ var init_eks2 = __esm({
       const hydratedPages = await Promise.all(
         [...clustersByRegion.entries()].map(async ([region, regionClusters]) => {
           const client = createEksClient({ region });
-          const nodegroups = [];
-          for (const cluster of regionClusters) {
+          const clusterNodegroups = await mapWithConcurrency(regionClusters, EKS_CLUSTER_CONCURRENCY, async (cluster) => {
+            const nodegroups = [];
             let nextToken;
             const nodegroupNames = [];
             do {
@@ -43267,8 +43427,9 @@ var init_eks2 = __esm({
               );
               nodegroups.push(...describedBatch.flatMap((nodegroup) => nodegroup ? [nodegroup] : []));
             }
-          }
-          return nodegroups;
+            return nodegroups;
+          });
+          return clusterNodegroups.flat();
         })
       );
       return hydratedPages.flat().sort((left, right) => left.nodegroupArn.localeCompare(right.nodegroupArn));
@@ -46031,108 +46192,112 @@ var init_tagging2 = __esm({
         if (resource.resourceType === "ec2:route-table" || resource.resourceType === "ec2:internet-gateway")
           origins.set(resource.arn, "unknown");
       }
-      await load("ec2:vpc", async (ids, NextToken) => {
-        const response = await runAwsRequest(
-          "Amazon EC2",
-          "DescribeVpcs",
-          region,
-          () => client.send(new import_client_ec29.DescribeVpcsCommand({ VpcIds: ids, NextToken }))
-        );
-        return {
-          resources: (response.Vpcs ?? []).map((vpc) => ({ id: vpc.VpcId, origin: defaultOrigin(vpc.IsDefault) })),
-          nextToken: response.NextToken
-        };
-      });
-      await load("ec2:dhcp-options", async (ids, NextToken) => {
-        const response = await runAwsRequest(
-          "Amazon EC2",
-          "DescribeDhcpOptions",
-          region,
-          () => client.send(new import_client_ec29.DescribeDhcpOptionsCommand({ DhcpOptionsIds: ids, NextToken }))
-        );
-        return {
-          resources: (response.DhcpOptions ?? []).map((options) => {
-            const domain = region === "us-east-1" ? "ec2.internal" : `${region}.compute.internal`;
-            const custom = options.DhcpConfigurations?.some(
-              (option) => option.Key !== "domain-name" && option.Key !== "domain-name-servers" || option.Values?.some(
-                (value) => value.Value !== (option.Key === "domain-name" ? domain : "AmazonProvidedDNS")
-              )
+      await Promise.all([
+        load("ec2:vpc", async (ids, NextToken) => {
+          const response = await runAwsRequest(
+            "Amazon EC2",
+            "DescribeVpcs",
+            region,
+            () => client.send(new import_client_ec29.DescribeVpcsCommand({ VpcIds: ids, NextToken }))
+          );
+          return {
+            resources: (response.Vpcs ?? []).map((vpc) => ({ id: vpc.VpcId, origin: defaultOrigin(vpc.IsDefault) })),
+            nextToken: response.NextToken
+          };
+        }),
+        load("ec2:dhcp-options", async (ids, NextToken) => {
+          const response = await runAwsRequest(
+            "Amazon EC2",
+            "DescribeDhcpOptions",
+            region,
+            () => client.send(new import_client_ec29.DescribeDhcpOptionsCommand({ DhcpOptionsIds: ids, NextToken }))
+          );
+          return {
+            resources: (response.DhcpOptions ?? []).map((options) => {
+              const domain = region === "us-east-1" ? "ec2.internal" : `${region}.compute.internal`;
+              const custom = options.DhcpConfigurations?.some(
+                (option) => option.Key !== "domain-name" && option.Key !== "domain-name-servers" || option.Values?.some(
+                  (value) => value.Value !== (option.Key === "domain-name" ? domain : "AmazonProvidedDNS")
+                )
+              );
+              return { id: options.DhcpOptionsId, origin: custom ? "user" : "unknown" };
+            }),
+            nextToken: response.NextToken
+          };
+        }),
+        load("ec2:subnet", async (ids, NextToken) => {
+          const response = await runAwsRequest(
+            "Amazon EC2",
+            "DescribeSubnets",
+            region,
+            () => client.send(new import_client_ec29.DescribeSubnetsCommand({ SubnetIds: ids, NextToken }))
+          );
+          return {
+            resources: (response.Subnets ?? []).map((subnet) => ({
+              id: subnet.SubnetId,
+              origin: defaultOrigin(subnet.DefaultForAz)
+            })),
+            nextToken: response.NextToken
+          };
+        }),
+        load("ec2:network-acl", async (ids, NextToken) => {
+          const response = await runAwsRequest(
+            "Amazon EC2",
+            "DescribeNetworkAcls",
+            region,
+            () => client.send(new import_client_ec29.DescribeNetworkAclsCommand({ NetworkAclIds: ids, NextToken }))
+          );
+          return {
+            resources: (response.NetworkAcls ?? []).map((acl) => ({
+              id: acl.NetworkAclId,
+              origin: defaultOrigin(acl.IsDefault)
+            })),
+            nextToken: response.NextToken
+          };
+        }),
+        (async () => {
+          await load("ec2:security-group", async (ids, NextToken) => {
+            const response = await describeGroups(ids, NextToken);
+            return {
+              resources: (response.SecurityGroups ?? []).map((group) => ({
+                id: group.GroupId,
+                origin: group.GroupName ? defaultOrigin(group.GroupName === "default") : "unknown"
+              })),
+              nextToken: response.NextToken
+            };
+          });
+          await load("ec2:security-group-rule", async (ids, NextToken) => {
+            const response = await runAwsRequest(
+              "Amazon EC2",
+              "DescribeSecurityGroupRules",
+              region,
+              () => client.send(new import_client_ec29.DescribeSecurityGroupRulesCommand({ SecurityGroupRuleIds: ids, NextToken }))
             );
-            return { id: options.DhcpOptionsId, origin: custom ? "user" : "unknown" };
-          }),
-          nextToken: response.NextToken
-        };
-      });
-      await load("ec2:subnet", async (ids, NextToken) => {
-        const response = await runAwsRequest(
-          "Amazon EC2",
-          "DescribeSubnets",
-          region,
-          () => client.send(new import_client_ec29.DescribeSubnetsCommand({ SubnetIds: ids, NextToken }))
-        );
-        return {
-          resources: (response.Subnets ?? []).map((subnet) => ({
-            id: subnet.SubnetId,
-            origin: defaultOrigin(subnet.DefaultForAz)
-          })),
-          nextToken: response.NextToken
-        };
-      });
-      await load("ec2:network-acl", async (ids, NextToken) => {
-        const response = await runAwsRequest(
-          "Amazon EC2",
-          "DescribeNetworkAcls",
-          region,
-          () => client.send(new import_client_ec29.DescribeNetworkAclsCommand({ NetworkAclIds: ids, NextToken }))
-        );
-        return {
-          resources: (response.NetworkAcls ?? []).map((acl) => ({
-            id: acl.NetworkAclId,
-            origin: defaultOrigin(acl.IsDefault)
-          })),
-          nextToken: response.NextToken
-        };
-      });
-      await load("ec2:security-group", async (ids, NextToken) => {
-        const response = await describeGroups(ids, NextToken);
-        return {
-          resources: (response.SecurityGroups ?? []).map((group) => ({
-            id: group.GroupId,
-            origin: group.GroupName ? defaultOrigin(group.GroupName === "default") : "unknown"
-          })),
-          nextToken: response.NextToken
-        };
-      });
-      await load("ec2:security-group-rule", async (ids, NextToken) => {
-        const response = await runAwsRequest(
-          "Amazon EC2",
-          "DescribeSecurityGroupRules",
-          region,
-          () => client.send(new import_client_ec29.DescribeSecurityGroupRulesCommand({ SecurityGroupRuleIds: ids, NextToken }))
-        );
-        const missingGroups = [
-          ...new Set(
-            (response.SecurityGroupRules ?? []).flatMap(
-              (rule) => rule.GroupId && !groupNames.has(rule.GroupId) ? [rule.GroupId] : []
-            )
-          )
-        ];
-        for (const batch of chunkItems(missingGroups, 100)) {
-          let nextToken;
-          do {
-            const page = await describeGroups(batch, nextToken);
-            nextToken = page.NextToken;
-          } while (nextToken);
-        }
-        return {
-          resources: (response.SecurityGroupRules ?? []).map((rule) => ({
-            id: rule.SecurityGroupRuleId,
-            // Rules on a default group may be AWS-provided or customer-added.
-            origin: rule.GroupId && groupNames.has(rule.GroupId) && groupNames.get(rule.GroupId) !== "default" ? "user" : "unknown"
-          })),
-          nextToken: response.NextToken
-        };
-      });
+            const missingGroups = [
+              ...new Set(
+                (response.SecurityGroupRules ?? []).flatMap(
+                  (rule) => rule.GroupId && !groupNames.has(rule.GroupId) ? [rule.GroupId] : []
+                )
+              )
+            ];
+            for (const batch of chunkItems(missingGroups, 100)) {
+              let nextToken;
+              do {
+                const page = await describeGroups(batch, nextToken);
+                nextToken = page.NextToken;
+              } while (nextToken);
+            }
+            return {
+              resources: (response.SecurityGroupRules ?? []).map((rule) => ({
+                id: rule.SecurityGroupRuleId,
+                // Rules on a default group may be AWS-provided or customer-added.
+                origin: rule.GroupId && groupNames.has(rule.GroupId) && groupNames.get(rule.GroupId) !== "default" ? "user" : "unknown"
+              })),
+              nextToken: response.NextToken
+            };
+          });
+        })()
+      ]);
     };
     loadResourceOrigins = async (resources) => {
       const origins = /* @__PURE__ */ new Map();
@@ -46142,48 +46307,50 @@ var init_tagging2 = __esm({
       const regions = [...new Set(metadataResources.map((resource) => resource.region))];
       await mapWithConcurrency(regions, 5, async (region) => {
         const regionalResources = metadataResources.filter((resource) => resource.region === region);
-        await loadEc2ResourceOrigins(regionalResources, region, origins);
-        await mapWithConcurrency(
-          regionalResources.filter(
-            (resource) => resource.resourceType === "kms:key" || resource.resourceType === "ssm:association"
-          ),
-          10,
-          async (resource) => {
-            origins.set(resource.arn, "unknown");
-            try {
-              if (resource.resourceType === "kms:key") {
-                const response = await runAwsRequest(
-                  "AWS KMS",
-                  "DescribeKey",
-                  region,
-                  () => createKmsClient({ region }).send(new import_client_kms3.DescribeKeyCommand({ KeyId: resource.arn }))
-                );
-                const manager = response.KeyMetadata?.KeyManager;
-                if (manager === "AWS" || manager === "CUSTOMER")
-                  origins.set(resource.arn, manager === "AWS" ? "aws" : "user");
-              } else {
-                const associationId = resource.arn.split("/").at(-1);
-                const response = await runAwsRequest(
-                  "AWS Systems Manager",
-                  "DescribeAssociation",
-                  region,
-                  () => createSsmClient({ region }).send(new import_client_ssm2.DescribeAssociationCommand({ AssociationId: associationId }))
-                );
-                const description = response.AssociationDescription;
-                if (description?.AssociationId === associationId && description?.Name) {
-                  const inspectorDocument = description.Name.startsWith("AmazonInspector2-") || description.Name === "AWS-GatherSoftwareInventory";
-                  origins.set(
-                    resource.arn,
-                    inspectorDocument && INSPECTOR_ASSOCIATION_NAMES.has(description.AssociationName ?? "") ? "aws" : "user"
+        await Promise.all([
+          loadEc2ResourceOrigins(regionalResources, region, origins),
+          mapWithConcurrency(
+            regionalResources.filter(
+              (resource) => resource.resourceType === "kms:key" || resource.resourceType === "ssm:association"
+            ),
+            10,
+            async (resource) => {
+              origins.set(resource.arn, "unknown");
+              try {
+                if (resource.resourceType === "kms:key") {
+                  const response = await runAwsRequest(
+                    "AWS KMS",
+                    "DescribeKey",
+                    region,
+                    () => createKmsClient({ region }).send(new import_client_kms3.DescribeKeyCommand({ KeyId: resource.arn }))
                   );
+                  const manager = response.KeyMetadata?.KeyManager;
+                  if (manager === "AWS" || manager === "CUSTOMER")
+                    origins.set(resource.arn, manager === "AWS" ? "aws" : "user");
+                } else {
+                  const associationId = resource.arn.split("/").at(-1);
+                  const response = await runAwsRequest(
+                    "AWS Systems Manager",
+                    "DescribeAssociation",
+                    region,
+                    () => createSsmClient({ region }).send(new import_client_ssm2.DescribeAssociationCommand({ AssociationId: associationId }))
+                  );
+                  const description = response.AssociationDescription;
+                  if (description?.AssociationId === associationId && description?.Name) {
+                    const inspectorDocument = description.Name.startsWith("AmazonInspector2-") || description.Name === "AWS-GatherSoftwareInventory";
+                    origins.set(
+                      resource.arn,
+                      inspectorDocument && INSPECTOR_ASSOCIATION_NAMES.has(description.AssociationName ?? "") ? "aws" : "user"
+                    );
+                  }
                 }
+              } catch (error2) {
+                const missingCode = resource.resourceType === "kms:key" ? "NotFoundException" : "AssociationDoesNotExist";
+                if (!isAwsAccessDeniedError(error2) && getAwsErrorCode(error2) !== missingCode) throw error2;
               }
-            } catch (error2) {
-              const missingCode = resource.resourceType === "kms:key" ? "NotFoundException" : "AssociationDoesNotExist";
-              if (!isAwsAccessDeniedError(error2) && getAwsErrorCode(error2) !== missingCode) throw error2;
             }
-          }
-        );
+          )
+        ]);
       });
       return origins;
     };
@@ -46519,7 +46686,7 @@ var init_discovery_registry = __esm({
         datasetKey: "aws-cloudfront-distributions",
         dependencies: [],
         schemaVersion: "1",
-        loaderVersion: "1",
+        loaderVersion: "2",
         freshness: { ttlMs: 6e5, observation: { kind: "current" } },
         resourceTypes: ["cloudfront:distribution"],
         service: "cloudfront",
@@ -48747,6 +48914,7 @@ var init_discovery = __esm({
         })
       );
       const readyCatalogs = /* @__PURE__ */ new Map();
+      let readyCatalogSnapshot;
       let catalogScopePromise;
       const resolveCatalogScope = () => catalogScopePromise ??= getAwsResourceExplorerEvidenceScope(target);
       let catalogFailureDiagnostic;
@@ -48758,6 +48926,7 @@ var init_discovery = __esm({
               onResourceTypeReady: (resourceType, readyCatalog) => {
                 throwIfAwsExecutionAborted();
                 readyCatalogs.set(resourceType, readyCatalog);
+                readyCatalogSnapshot = void 0;
                 catalogInputs.get(resourceType)?.resolve(readyCatalog);
               }
             });
@@ -49051,6 +49220,18 @@ var init_discovery = __esm({
       };
       const completedLoads = /* @__PURE__ */ new Map();
       const reportedRules = /* @__PURE__ */ new Set();
+      const buildReadyCatalog = () => {
+        const ready = [...readyCatalogs.values()];
+        return {
+          ...ready[0] ?? catalog,
+          resources: ready.flatMap((input) => input.resources).sort((left, right) => left.arn.localeCompare(right.arn))
+        };
+      };
+      const readyCatalogSnapshotFor = () => {
+        if (readyCatalogs.size === 0) return buildReadyCatalog();
+        if (!readyCatalogSnapshot) readyCatalogSnapshot = buildReadyCatalog();
+        return readyCatalogSnapshot;
+      };
       const notifyReadyRules = () => {
         if (!options?.onRuleReady) return;
         const readyRules = rules.filter((rule) => {
@@ -49064,10 +49245,7 @@ var init_discovery = __esm({
         if (readyRules.length === 0) return;
         const snapshotLoads = [...completedLoads.values()].map(finalizeLoad);
         const snapshot = {
-          catalog: catalogFailureDiagnostic ? catalog : {
-            ...[...readyCatalogs.values()][0] ?? catalog,
-            resources: [...readyCatalogs.values()].flatMap((input) => input.resources).sort((left, right) => left.arn.localeCompare(right.arn))
-          },
+          catalog: catalogFailureDiagnostic ? catalog : readyCatalogSnapshotFor(),
           diagnostics: [],
           resources: new LiveResourceBag(
             Object.fromEntries(snapshotLoads.map((load) => load.dataset))
@@ -49615,8 +49793,9 @@ var init_run_live = __esm({
             status: "skipped"
           });
         }
-        const finding = rule.evaluateLive(ruleContext);
-        const coverage = rule.getLiveEvaluationCoverage?.(ruleContext);
+        const evaluationContext = { ...ruleContext, scratch: /* @__PURE__ */ new WeakMap() };
+        const finding = rule.evaluateLive(evaluationContext);
+        const coverage = rule.getLiveEvaluationCoverage?.(evaluationContext);
         const unknownCount = coverage?.unknown.length ?? 0;
         const coverageReason = unknownCount > 0 ? `Could not assess ${unknownCount} resource(s) for rule ${rule.id} because required evidence was incomplete or unavailable.` : excludedRegions.size > 0 ? `Could not assess resources in ${[...excludedRegions].sort().join(", ")} because required discovery evidence was unavailable.` : void 0;
         if (unknownCount > 0 && coverageReason) {
@@ -56821,9 +57000,9 @@ var getInputs = () => {
 };
 
 // src/version.ts
-var ACTION_VERSION = "1.0.4";
-var SDK_VERSION = "0.38.0";
-var RULES_VERSION = "0.35.0";
+var ACTION_VERSION = "1.0.5";
+var SDK_VERSION = "0.38.1";
+var RULES_VERSION = "0.35.1";
 
 // src/markdown.ts
 var escapeCell = (value) => value.replace(/\\/g, "\\\\").replace(/[[\]<>|]/g, "\\$&").replace(/\r\n?|\n/g, " ");
