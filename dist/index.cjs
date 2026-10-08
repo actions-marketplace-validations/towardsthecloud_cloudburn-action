@@ -22616,7 +22616,7 @@ var init_missing_lifecycle_policy = __esm({
         );
       },
       evaluateStatic: ({ resources }) => {
-        const findings = resources.get("aws-ecr-repositories").filter((repository) => !repository.hasLifecyclePolicy).map((repository) => createFindingMatch(repository.resourceId, void 0, void 0, repository.location));
+        const findings = resources.get("aws-ecr-repositories").filter((repository) => repository.hasLifecyclePolicy === false).map((repository) => createFindingMatch(repository.resourceId, void 0, void 0, repository.location));
         return createFinding(
           { id: RULE_ID43, service: RULE_SERVICE43, severity: RULE_SEVERITY43, message: RULE_MESSAGE43 },
           "iac",
@@ -24785,7 +24785,7 @@ var init_pause_resume = __esm({
       // Pause/resume requires an available VPC-backed cluster, known automated snapshots, no HSM, and no Multi-AZ deployment.
       cluster.pauseResumeStateAvailable !== false && cluster.clusterStatus === "available" && (cluster.automatedSnapshotRetentionPeriod ?? 0) > 0 && !cluster.hsmEnabled && cluster.multiAz?.toLowerCase() !== "enabled" && cluster.vpcId !== void 0
     );
-    isStaticPauseResumeEligible = (cluster) => (cluster.automatedSnapshotRetentionPeriod ?? 0) > 0 && cluster.hasVpc && cluster.hsmEnabled !== true && cluster.multiAz !== true;
+    isStaticPauseResumeEligible = (cluster) => (cluster.automatedSnapshotRetentionPeriod ?? 0) > 0 && cluster.hasVpc === true && cluster.hsmEnabled === false && cluster.multiAz === false;
     redshiftPauseResumeRule = createRule({
       severity: RULE_SEVERITY78,
       id: RULE_ID78,
@@ -25822,6 +25822,56 @@ var init_errors = __esm({
   }
 });
 
+// ../sdk/src/errors.ts
+var CREDENTIALS_ERROR_MESSAGE, redactErrorMessage, isCredentialsError, toRedactedErrorMessage, categorizeError;
+var init_errors2 = __esm({
+  "../sdk/src/errors.ts"() {
+    "use strict";
+    init_errors();
+    CREDENTIALS_ERROR_MESSAGE = "AWS credentials not found or expired. Run 'aws sts get-caller-identity' to verify your session.";
+    redactErrorMessage = (message3) => message3.replace(/169\.254\.169\.254|169\.254\.170\.23?(?![0-9])/g, "[redacted-host]").replace(/fd00:ec2::(?:254|23)/gi, "[redacted-host]").replace(/(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/gi, "$1[redacted-auth]@").replace(
+      /([?&](?:access_token|authorization|token|x-amz-credential|x-amz-security-token|x-amz-signature|signature)=)[^&\s]+/gi,
+      "$1[redacted]"
+    ).replace(/(\b(?:Credential|Signature)=)[^,&\s]+/g, "$1[redacted]").replace(
+      /(\b(?:aws_)?(?:secret_?access_?key|session_?token|security_?token|x-amz-security-token)["']?\s*[:=]\s*["']?)[^\s"',;&}]+/gi,
+      "$1[redacted]"
+    ).replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, "[redacted-access-key-id]").replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, "$1[redacted]");
+    isCredentialsError = (err) => {
+      const code = "code" in err && typeof err.code === "string" ? err.code : void 0;
+      return err.name === "CredentialsProviderError" || err.name === "ExpiredTokenException" || code === "CredentialsProviderError" || code === "ExpiredTokenException";
+    };
+    toRedactedErrorMessage = (err) => {
+      if (!(err instanceof Error)) {
+        return redactErrorMessage(String(err)).trim();
+      }
+      return isCredentialsError(err) ? CREDENTIALS_ERROR_MESSAGE : redactErrorMessage(err.message).trim();
+    };
+    categorizeError = (err) => {
+      if (!(err instanceof Error)) {
+        return { code: "RUNTIME_ERROR", message: "An unexpected error occurred." };
+      }
+      const code = "code" in err && typeof err.code === "string" ? err.code : void 0;
+      const message3 = redactErrorMessage(err.message).trim();
+      if (isCredentialsError(err)) {
+        return { code: "CREDENTIALS_ERROR", message: CREDENTIALS_ERROR_MESSAGE };
+      }
+      if (err.name.includes("AccessDenied") || code?.includes("AccessDenied") === true) {
+        return {
+          code: "ACCESS_DENIED",
+          message: message3 || "Insufficient AWS permissions. Check your IAM role or policy."
+        };
+      }
+      if (code === "ENOENT") {
+        return { code: "PATH_NOT_FOUND", message: `Path not found: ${err.path ?? "unknown"}` };
+      }
+      if (code !== void 0 && isAwsDiscoveryErrorCode(code)) {
+        return { code, message: message3 || "AWS Resource Explorer discovery failed." };
+      }
+      return { code: "RUNTIME_ERROR", message: message3 || "An unexpected error occurred." };
+    };
+  }
+});
+
 // ../sdk/src/evidence-cache.ts
 var import_node_crypto, import_node_fs, import_node_path, import_promises, hash, encode, decode, serialize, inspect, createMemoryEvidenceCacheStore, localDatabases, createLocalEvidenceCacheStore, directoryFlights, storeFlights, waitForFlight, createEvidenceCache;
 var init_evidence_cache = __esm({
@@ -25904,13 +25954,23 @@ var init_evidence_cache = __esm({
     localDatabases = /* @__PURE__ */ new Map();
     createLocalEvidenceCacheStore = (directory) => {
       const filename = (0, import_node_path.join)((0, import_node_path.resolve)(directory), "evidence.sqlite");
+      const uid = process.getuid?.();
+      const validateDirectory = () => {
+        const existing = (0, import_node_fs.lstatSync)(directory, { throwIfNoEntry: false });
+        if (existing?.isSymbolicLink()) throw new Error("Evidence cache directory must not be a symbolic link");
+        if (existing && (!existing.isDirectory() || uid !== void 0 && existing.uid !== uid)) {
+          throw new Error("Evidence cache directory must be a directory owned by the current user");
+        }
+      };
       const databaseState = localDatabases.get(filename) ?? { schemaReady: false };
       localDatabases.set(filename, databaseState);
       const sqlite = import("node:sqlite");
       const open2 = (DatabaseSyncCtor) => {
         let opened;
         try {
+          validateDirectory();
           (0, import_node_fs.mkdirSync)(directory, { recursive: true, mode: 448 });
+          validateDirectory();
           (0, import_node_fs.chmodSync)(directory, 448);
           if ((0, import_node_fs.lstatSync)(filename, { throwIfNoEntry: false })?.isSymbolicLink())
             throw new Error("Evidence database must not be a symbolic link");
@@ -32519,7 +32579,7 @@ var require_lexer = __commonJS({
 var require_line_counter = __commonJS({
   "../../node_modules/.pnpm/yaml@2.9.0/node_modules/yaml/dist/parse/line-counter.js"(exports2) {
     "use strict";
-    var LineCounter2 = class {
+    var LineCounter3 = class {
       constructor() {
         this.lineStarts = [];
         this.addNewLine = (offset) => this.lineStarts.push(offset);
@@ -32542,7 +32602,7 @@ var require_line_counter = __commonJS({
         };
       }
     };
-    exports2.LineCounter = LineCounter2;
+    exports2.LineCounter = LineCounter3;
   }
 });
 
@@ -34776,7 +34836,7 @@ var require_copy = __commonJS({
     var { mkdirs } = require_mkdirs();
     var { pathExists } = require_path_exists();
     var { utimesMillis } = require_utimes();
-    var stat4 = require_stat();
+    var stat5 = require_stat();
     async function copy(src, dest, opts = {}) {
       if (typeof opts === "function") {
         opts = { filter: opts };
@@ -34790,8 +34850,8 @@ var require_copy = __commonJS({
           "fs-extra-WARN0001"
         );
       }
-      const { srcStat, destStat } = await stat4.checkPaths(src, dest, "copy", opts);
-      await stat4.checkParentPaths(src, srcStat, dest, "copy");
+      const { srcStat, destStat } = await stat5.checkPaths(src, dest, "copy", opts);
+      await stat5.checkParentPaths(src, srcStat, dest, "copy");
       const include = await runFilter(src, dest, opts);
       if (!include) return;
       const destParent = path.dirname(dest);
@@ -34853,7 +34913,7 @@ var require_copy = __commonJS({
         promises3.push(
           runFilter(srcItem, destItem, opts).then((include) => {
             if (include) {
-              return stat4.checkPaths(srcItem, destItem, "copy", opts).then(({ destStat: destStat2 }) => {
+              return stat5.checkPaths(srcItem, destItem, "copy", opts).then(({ destStat: destStat2 }) => {
                 return getStatsAndPerformCopy(destStat2, srcItem, destItem, opts);
               });
             }
@@ -34883,10 +34943,10 @@ var require_copy = __commonJS({
       if (opts.dereference) {
         resolvedDest = path.resolve(process.cwd(), resolvedDest);
       }
-      if (stat4.isSrcSubdir(resolvedSrc, resolvedDest)) {
+      if (stat5.isSrcSubdir(resolvedSrc, resolvedDest)) {
         throw new Error(`Cannot copy '${resolvedSrc}' to a subdirectory of itself, '${resolvedDest}'.`);
       }
-      if (stat4.isSrcSubdir(resolvedDest, resolvedSrc)) {
+      if (stat5.isSrcSubdir(resolvedDest, resolvedSrc)) {
         throw new Error(`Cannot overwrite '${resolvedDest}' with '${resolvedSrc}'.`);
       }
       await fs4.unlink(dest);
@@ -34904,7 +34964,7 @@ var require_copy_sync = __commonJS({
     var path = require("path");
     var mkdirsSync = require_mkdirs().mkdirsSync;
     var utimesMillisSync = require_utimes().utimesMillisSync;
-    var stat4 = require_stat();
+    var stat5 = require_stat();
     function copySync(src, dest, opts) {
       if (typeof opts === "function") {
         opts = { filter: opts };
@@ -34919,8 +34979,8 @@ var require_copy_sync = __commonJS({
           "fs-extra-WARN0002"
         );
       }
-      const { srcStat, destStat } = stat4.checkPathsSync(src, dest, "copy", opts);
-      stat4.checkParentPathsSync(src, srcStat, dest, "copy");
+      const { srcStat, destStat } = stat5.checkPathsSync(src, dest, "copy", opts);
+      stat5.checkParentPathsSync(src, srcStat, dest, "copy");
       if (opts.filter && !opts.filter(src, dest)) return;
       const destParent = path.dirname(dest);
       if (!fs4.existsSync(destParent)) mkdirsSync(destParent);
@@ -34994,7 +35054,7 @@ var require_copy_sync = __commonJS({
       const srcItem = path.join(src, item);
       const destItem = path.join(dest, item);
       if (opts.filter && !opts.filter(srcItem, destItem)) return;
-      const { destStat } = stat4.checkPathsSync(srcItem, destItem, "copy", opts);
+      const { destStat } = stat5.checkPathsSync(srcItem, destItem, "copy", opts);
       return getStats(destStat, srcItem, destItem, opts);
     }
     function onLink(destStat, src, dest, opts) {
@@ -35015,10 +35075,10 @@ var require_copy_sync = __commonJS({
         if (opts.dereference) {
           resolvedDest = path.resolve(process.cwd(), resolvedDest);
         }
-        if (stat4.isSrcSubdir(resolvedSrc, resolvedDest)) {
+        if (stat5.isSrcSubdir(resolvedSrc, resolvedDest)) {
           throw new Error(`Cannot copy '${resolvedSrc}' to a subdirectory of itself, '${resolvedDest}'.`);
         }
-        if (stat4.isSrcSubdir(resolvedDest, resolvedSrc)) {
+        if (stat5.isSrcSubdir(resolvedDest, resolvedSrc)) {
           throw new Error(`Cannot overwrite '${resolvedDest}' with '${resolvedSrc}'.`);
         }
         return copyLink(resolvedSrc, dest);
@@ -35606,11 +35666,11 @@ var require_move = __commonJS({
     var { remove } = require_remove();
     var { mkdirp } = require_mkdirs();
     var { pathExists } = require_path_exists();
-    var stat4 = require_stat();
+    var stat5 = require_stat();
     async function move(src, dest, opts = {}) {
       const overwrite = opts.overwrite || opts.clobber || false;
-      const { srcStat, isChangingCase = false } = await stat4.checkPaths(src, dest, "move", opts);
-      await stat4.checkParentPaths(src, srcStat, dest, "move");
+      const { srcStat, isChangingCase = false } = await stat5.checkPaths(src, dest, "move", opts);
+      await stat5.checkParentPaths(src, srcStat, dest, "move");
       const destParent = path.dirname(dest);
       const parsedParentPath = path.parse(destParent);
       if (parsedParentPath.root !== destParent) {
@@ -35657,12 +35717,12 @@ var require_move_sync = __commonJS({
     var copySync = require_copy2().copySync;
     var removeSync = require_remove().removeSync;
     var mkdirpSync = require_mkdirs().mkdirpSync;
-    var stat4 = require_stat();
+    var stat5 = require_stat();
     function moveSync(src, dest, opts) {
       opts = opts || {};
       const overwrite = opts.overwrite || opts.clobber || false;
-      const { srcStat, isChangingCase = false } = stat4.checkPathsSync(src, dest, "move", opts);
-      stat4.checkParentPathsSync(src, srcStat, dest, "move");
+      const { srcStat, isChangingCase = false } = stat5.checkPathsSync(src, dest, "move", opts);
+      stat5.checkParentPathsSync(src, srcStat, dest, "move");
       if (!isParentRoot(dest)) mkdirpSync(path.dirname(dest));
       return doRename(src, dest, overwrite, isChangingCase);
     }
@@ -36848,6 +36908,247 @@ var init_regions = __esm({
   }
 });
 
+// ../sdk/src/providers/aws/request-store.ts
+var import_node_crypto2, import_node_fs2, import_node_os, import_node_path5, import_node_sqlite, import_promises5, resolveCloudBurnCacheDirectory, createMemoryAwsRequestStore, localStateError, initializeDirectory, mayContainState, isOwnedDirectory, initializeTemporaryDirectory, initializeDefaultDirectory, MAX_OPEN_DATABASES, createLocalAwsRequestStore;
+var init_request_store = __esm({
+  "../sdk/src/providers/aws/request-store.ts"() {
+    "use strict";
+    import_node_crypto2 = require("node:crypto");
+    import_node_fs2 = require("node:fs");
+    import_node_os = require("node:os");
+    import_node_path5 = require("node:path");
+    import_node_sqlite = require("node:sqlite");
+    import_promises5 = require("node:timers/promises");
+    resolveCloudBurnCacheDirectory = (name, env = process.env) => {
+      const xdgCacheHome = env.XDG_CACHE_HOME;
+      const root = xdgCacheHome && (0, import_node_path5.isAbsolute)(xdgCacheHome) ? xdgCacheHome : (0, import_node_path5.join)((0, import_node_os.homedir)(), ".cache");
+      return (0, import_node_path5.join)(root, "cloudburn", name);
+    };
+    createMemoryAwsRequestStore = () => {
+      const states = /* @__PURE__ */ new Map();
+      return {
+        update: async (key, update, signal) => {
+          signal?.throwIfAborted();
+          const next = update(states.get(key));
+          signal?.throwIfAborted();
+          states.set(key, next.state);
+          return next.value;
+        }
+      };
+    };
+    localStateError = (directory, cause) => new Error(
+      `Cannot use local AWS admission state in ${directory}: ${cause instanceof Error ? cause.message : "unknown storage error"}. Check directory permissions and disk space; repair corrupted state only after stopping all CloudBurn processes. Configure a shared writable directory with CLOUDBURN_AWS_ADMISSION_DIR.`,
+      { cause }
+    );
+    initializeDirectory = (directory) => {
+      (0, import_node_fs2.mkdirSync)(directory, { recursive: true, mode: 448 });
+      (0, import_node_fs2.chmodSync)(directory, 448);
+    };
+    mayContainState = (directory) => {
+      try {
+        const existing = (0, import_node_fs2.lstatSync)(directory, { throwIfNoEntry: false });
+        return existing !== void 0;
+      } catch (error2) {
+        if (error2.code === "ENOTDIR") return false;
+        throw error2;
+      }
+    };
+    isOwnedDirectory = (directory, uid) => {
+      try {
+        const existing = (0, import_node_fs2.lstatSync)(directory, { throwIfNoEntry: false });
+        return existing !== void 0 && !existing.isSymbolicLink() && existing.isDirectory() && (uid === void 0 || existing.uid === uid);
+      } catch (error2) {
+        if (error2.code === "ENOTDIR") return false;
+        throw error2;
+      }
+    };
+    initializeTemporaryDirectory = (directory, uid) => {
+      const validate = () => {
+        const existing = (0, import_node_fs2.lstatSync)(directory, { throwIfNoEntry: false });
+        if (existing?.isSymbolicLink()) throw new Error("Temporary AWS admission state must not use a symbolic link");
+        if (existing && (!existing.isDirectory() || uid !== void 0 && existing.uid !== uid)) {
+          throw new Error("Temporary AWS admission state must be a directory owned by the current user");
+        }
+      };
+      validate();
+      (0, import_node_fs2.mkdirSync)(directory, { recursive: true, mode: 448 });
+      validate();
+      (0, import_node_fs2.chmodSync)(directory, 448);
+    };
+    initializeDefaultDirectory = (directory) => {
+      const existing = mayContainState(directory);
+      const uid = process.getuid?.();
+      const user = uid ?? (0, import_node_crypto2.createHash)("sha256").update((0, import_node_os.homedir)()).digest("hex").slice(0, 16);
+      const root = (0, import_node_path5.join)((0, import_node_os.tmpdir)(), `cloudburn-${user}`);
+      const fallback = (0, import_node_path5.join)(root, "aws-admission-v1");
+      const existingFallback = isOwnedDirectory(root, uid) && mayContainState(fallback);
+      if (existing && existingFallback) {
+        throw new Error(
+          "Both default and temporary AWS admission locations exist; select the active state with CLOUDBURN_AWS_ADMISSION_DIR after stopping all CloudBurn processes"
+        );
+      }
+      if (existingFallback) {
+        initializeTemporaryDirectory(root, uid);
+        initializeTemporaryDirectory(fallback, uid);
+        return fallback;
+      }
+      try {
+        initializeDirectory(directory);
+        return directory;
+      } catch (error2) {
+        const code = error2.code;
+        if (existing || !code || !["EACCES", "EPERM", "EROFS", "ENOTDIR", "EEXIST"].includes(code) || mayContainState(directory)) {
+          throw error2;
+        }
+      }
+      initializeTemporaryDirectory(root, uid);
+      initializeTemporaryDirectory(fallback, uid);
+      return fallback;
+    };
+    MAX_OPEN_DATABASES = 32;
+    createLocalAwsRequestStore = (directory) => {
+      let selectedDirectory = directory ?? process.env.CLOUDBURN_AWS_ADMISSION_DIR;
+      const primary = selectedDirectory ?? resolveCloudBurnCacheDirectory("aws-admission-v1");
+      const handles = /* @__PURE__ */ new Map();
+      const evict = (filename, handle) => {
+        if (handles.get(filename) === handle) handles.delete(filename);
+        handle.database.close();
+      };
+      const remember = (filename, handle) => {
+        handles.delete(filename);
+        handles.set(filename, handle);
+        while (handles.size > MAX_OPEN_DATABASES) {
+          const oldest = handles.entries().next().value;
+          evict(oldest[0], oldest[1]);
+        }
+      };
+      return {
+        update: async (key, update, signal, options) => {
+          signal?.throwIfAborted();
+          if (selectedDirectory === void 0) {
+            try {
+              selectedDirectory = initializeDefaultDirectory(primary);
+            } catch (error2) {
+              throw localStateError(primary, error2);
+            }
+          }
+          const directory2 = selectedDirectory;
+          const filename = (0, import_node_path5.join)(directory2, `${(0, import_node_crypto2.createHash)("sha256").update(key).digest("hex")}.sqlite`);
+          let filenameStat;
+          try {
+            initializeDirectory(directory2);
+            filenameStat = (0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false });
+            if (filenameStat?.isSymbolicLink()) {
+              throw new Error("The local AWS admission database must not be a symbolic link");
+            }
+          } catch (error2) {
+            throw localStateError(directory2, error2);
+          }
+          const startedAt = performance.now();
+          let firstAttempt = true;
+          while (true) {
+            signal?.throwIfAborted();
+            if (!firstAttempt) {
+              try {
+                filenameStat = (0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false });
+              } catch (error2) {
+                throw localStateError(directory2, error2);
+              }
+            }
+            firstAttempt = false;
+            let handle = handles.get(filename);
+            if (handle && (filenameStat === void 0 || handle.dev !== filenameStat.dev || handle.ino !== filenameStat.ino)) {
+              evict(filename, handle);
+              handle = void 0;
+            }
+            let freshDatabase;
+            let database;
+            let applyingTransition = false;
+            let evictOnError = false;
+            try {
+              if (!handle) {
+                try {
+                  freshDatabase = new import_node_sqlite.DatabaseSync(filename, { timeout: 0 });
+                  (0, import_node_fs2.chmodSync)(filename, 384);
+                  const identity = (0, import_node_fs2.lstatSync)(filename);
+                  handle = { database: freshDatabase, dev: identity.dev, ino: identity.ino };
+                  freshDatabase = void 0;
+                  remember(filename, handle);
+                } catch (error2) {
+                  freshDatabase?.close();
+                  throw error2;
+                }
+              } else {
+                remember(filename, handle);
+              }
+              database = handle.database;
+              database.exec("BEGIN IMMEDIATE");
+              handle.version ??= database.prepare("PRAGMA user_version");
+              const version = handle.version.get()?.user_version;
+              if (version === 0) {
+                database.exec("CREATE TABLE request_state_v1 (id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL)");
+                database.exec("PRAGMA user_version = 1");
+              } else if (version !== 1) {
+                throw new Error(`Unsupported local AWS admission state version ${version}`);
+              }
+              handle.select ??= database.prepare("SELECT state FROM request_state_v1 WHERE id = 1");
+              const row = handle.select.get();
+              if (row !== void 0 && typeof row.state !== "string") {
+                throw new Error("Invalid local AWS admission state payload");
+              }
+              signal?.throwIfAborted();
+              applyingTransition = true;
+              const next = update(row?.state);
+              applyingTransition = false;
+              signal?.throwIfAborted();
+              if (next.state === row?.state) return next.value;
+              handle.insert ??= database.prepare("INSERT OR REPLACE INTO request_state_v1 (id, state) VALUES (1, ?)");
+              handle.insert.run(next.state);
+              signal?.throwIfAborted();
+              database.exec("COMMIT");
+              return next.value;
+            } catch (error2) {
+              signal?.throwIfAborted();
+              if (applyingTransition) throw error2;
+              if (!(error2 instanceof Error && "errcode" in error2 && typeof error2.errcode === "number" && (error2.errcode & 255) === 5)) {
+                evictOnError = true;
+                throw localStateError(directory2, error2);
+              }
+              if (performance.now() - startedAt >= 5e3) {
+                throw new Error(
+                  `Local AWS admission state stayed locked for 5 seconds in ${directory2}. Stop the process holding the transaction, or set CLOUDBURN_AWS_ADMISSION_DIR to a writable private directory shared by your workers.`,
+                  { cause: error2 }
+                );
+              }
+            } finally {
+              try {
+                if (database?.isTransaction) database.exec("ROLLBACK");
+              } finally {
+                if (handle && (evictOnError || handle.database.isTransaction)) evict(filename, handle);
+              }
+            }
+            try {
+              await (0, import_promises5.setTimeout)(10, void 0, { signal, ref: options?.ref });
+            } catch (error2) {
+              signal?.throwIfAborted();
+              throw error2;
+            }
+          }
+        },
+        close: () => {
+          for (const [filename, handle] of handles) {
+            try {
+              evict(filename, handle);
+            } catch {
+            }
+          }
+          handles.clear();
+        }
+      };
+    };
+  }
+});
+
 // ../sdk/src/debug.ts
 var emitDebugLog;
 var init_debug = __esm({
@@ -37625,233 +37926,6 @@ var init_request_policy = __esm({
           overrides
         ),
         cost: metricDataCost(request2, now, pageLimit)
-      };
-    };
-  }
-});
-
-// ../sdk/src/providers/aws/request-store.ts
-var import_node_crypto2, import_node_fs2, import_node_os, import_node_path7, import_node_sqlite, import_promises6, createMemoryAwsRequestStore, localStateError, initializeDirectory, mayContainState, initializeTemporaryDirectory, initializeDefaultDirectory, MAX_OPEN_DATABASES, createLocalAwsRequestStore;
-var init_request_store = __esm({
-  "../sdk/src/providers/aws/request-store.ts"() {
-    "use strict";
-    import_node_crypto2 = require("node:crypto");
-    import_node_fs2 = require("node:fs");
-    import_node_os = require("node:os");
-    import_node_path7 = require("node:path");
-    import_node_sqlite = require("node:sqlite");
-    import_promises6 = require("node:timers/promises");
-    createMemoryAwsRequestStore = () => {
-      const states = /* @__PURE__ */ new Map();
-      return {
-        update: async (key, update, signal) => {
-          signal?.throwIfAborted();
-          const next = update(states.get(key));
-          signal?.throwIfAborted();
-          states.set(key, next.state);
-          return next.value;
-        }
-      };
-    };
-    localStateError = (directory, cause) => new Error(
-      `Cannot use local AWS admission state in ${directory}: ${cause instanceof Error ? cause.message : "unknown storage error"}. Check directory permissions and disk space; repair corrupted state only after stopping all CloudBurn processes. Configure a shared writable directory with CLOUDBURN_AWS_ADMISSION_DIR.`,
-      { cause }
-    );
-    initializeDirectory = (directory) => {
-      (0, import_node_fs2.mkdirSync)(directory, { recursive: true, mode: 448 });
-      (0, import_node_fs2.chmodSync)(directory, 448);
-    };
-    mayContainState = (directory) => {
-      try {
-        const existing = (0, import_node_fs2.lstatSync)(directory, { throwIfNoEntry: false });
-        return existing !== void 0;
-      } catch (error2) {
-        if (error2.code === "ENOTDIR") return false;
-        throw error2;
-      }
-    };
-    initializeTemporaryDirectory = (directory, uid) => {
-      const validate = () => {
-        const existing = (0, import_node_fs2.lstatSync)(directory, { throwIfNoEntry: false });
-        if (existing?.isSymbolicLink()) throw new Error("Temporary AWS admission state must not use a symbolic link");
-        if (existing && (!existing.isDirectory() || uid !== void 0 && existing.uid !== uid)) {
-          throw new Error("Temporary AWS admission state must be a directory owned by the current user");
-        }
-      };
-      validate();
-      (0, import_node_fs2.mkdirSync)(directory, { recursive: true, mode: 448 });
-      validate();
-      (0, import_node_fs2.chmodSync)(directory, 448);
-    };
-    initializeDefaultDirectory = (directory) => {
-      const existing = mayContainState(directory);
-      const uid = process.getuid?.();
-      const user = uid ?? (0, import_node_crypto2.createHash)("sha256").update((0, import_node_os.homedir)()).digest("hex").slice(0, 16);
-      const root = (0, import_node_path7.join)((0, import_node_os.tmpdir)(), `cloudburn-${user}`);
-      const fallback = (0, import_node_path7.join)(root, "aws-admission-v1");
-      const existingFallback = mayContainState(fallback);
-      if (existing && existingFallback) {
-        throw new Error(
-          "Both default and temporary AWS admission locations exist; select the active state with CLOUDBURN_AWS_ADMISSION_DIR after stopping all CloudBurn processes"
-        );
-      }
-      if (existingFallback) {
-        initializeTemporaryDirectory(root, uid);
-        initializeTemporaryDirectory(fallback, uid);
-        return fallback;
-      }
-      try {
-        initializeDirectory(directory);
-        return directory;
-      } catch (error2) {
-        const code = error2.code;
-        if (existing || !code || !["EACCES", "EPERM", "EROFS", "ENOTDIR", "EEXIST"].includes(code) || mayContainState(directory)) {
-          throw error2;
-        }
-      }
-      initializeTemporaryDirectory(root, uid);
-      initializeTemporaryDirectory(fallback, uid);
-      return fallback;
-    };
-    MAX_OPEN_DATABASES = 32;
-    createLocalAwsRequestStore = (directory) => {
-      let selectedDirectory = directory ?? process.env.CLOUDBURN_AWS_ADMISSION_DIR;
-      const primary = selectedDirectory ?? (0, import_node_path7.join)(process.env.XDG_CACHE_HOME || (0, import_node_path7.join)((0, import_node_os.homedir)(), ".cache"), "cloudburn", "aws-admission-v1");
-      const handles = /* @__PURE__ */ new Map();
-      const evict = (filename, handle) => {
-        if (handles.get(filename) === handle) handles.delete(filename);
-        handle.database.close();
-      };
-      const remember = (filename, handle) => {
-        handles.delete(filename);
-        handles.set(filename, handle);
-        while (handles.size > MAX_OPEN_DATABASES) {
-          const oldest = handles.entries().next().value;
-          evict(oldest[0], oldest[1]);
-        }
-      };
-      return {
-        update: async (key, update, signal, options) => {
-          signal?.throwIfAborted();
-          if (selectedDirectory === void 0) {
-            try {
-              selectedDirectory = initializeDefaultDirectory(primary);
-            } catch (error2) {
-              throw localStateError(primary, error2);
-            }
-          }
-          const directory2 = selectedDirectory;
-          const filename = (0, import_node_path7.join)(directory2, `${(0, import_node_crypto2.createHash)("sha256").update(key).digest("hex")}.sqlite`);
-          let filenameStat;
-          try {
-            initializeDirectory(directory2);
-            filenameStat = (0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false });
-            if (filenameStat?.isSymbolicLink()) {
-              throw new Error("The local AWS admission database must not be a symbolic link");
-            }
-          } catch (error2) {
-            throw localStateError(directory2, error2);
-          }
-          const startedAt = performance.now();
-          let firstAttempt = true;
-          while (true) {
-            signal?.throwIfAborted();
-            if (!firstAttempt) {
-              try {
-                filenameStat = (0, import_node_fs2.lstatSync)(filename, { throwIfNoEntry: false });
-              } catch (error2) {
-                throw localStateError(directory2, error2);
-              }
-            }
-            firstAttempt = false;
-            let handle = handles.get(filename);
-            if (handle && (filenameStat === void 0 || handle.dev !== filenameStat.dev || handle.ino !== filenameStat.ino)) {
-              evict(filename, handle);
-              handle = void 0;
-            }
-            let freshDatabase;
-            let database;
-            let applyingTransition = false;
-            let evictOnError = false;
-            try {
-              if (!handle) {
-                try {
-                  freshDatabase = new import_node_sqlite.DatabaseSync(filename, { timeout: 0 });
-                  (0, import_node_fs2.chmodSync)(filename, 384);
-                  const identity = (0, import_node_fs2.lstatSync)(filename);
-                  handle = { database: freshDatabase, dev: identity.dev, ino: identity.ino };
-                  freshDatabase = void 0;
-                  remember(filename, handle);
-                } catch (error2) {
-                  freshDatabase?.close();
-                  throw error2;
-                }
-              } else {
-                remember(filename, handle);
-              }
-              database = handle.database;
-              database.exec("BEGIN IMMEDIATE");
-              handle.version ??= database.prepare("PRAGMA user_version");
-              const version = handle.version.get()?.user_version;
-              if (version === 0) {
-                database.exec("CREATE TABLE request_state_v1 (id INTEGER PRIMARY KEY CHECK (id = 1), state TEXT NOT NULL)");
-                database.exec("PRAGMA user_version = 1");
-              } else if (version !== 1) {
-                throw new Error(`Unsupported local AWS admission state version ${version}`);
-              }
-              handle.select ??= database.prepare("SELECT state FROM request_state_v1 WHERE id = 1");
-              const row = handle.select.get();
-              if (row !== void 0 && typeof row.state !== "string") {
-                throw new Error("Invalid local AWS admission state payload");
-              }
-              signal?.throwIfAborted();
-              applyingTransition = true;
-              const next = update(row?.state);
-              applyingTransition = false;
-              signal?.throwIfAborted();
-              if (next.state === row?.state) return next.value;
-              handle.insert ??= database.prepare("INSERT OR REPLACE INTO request_state_v1 (id, state) VALUES (1, ?)");
-              handle.insert.run(next.state);
-              signal?.throwIfAborted();
-              database.exec("COMMIT");
-              return next.value;
-            } catch (error2) {
-              signal?.throwIfAborted();
-              if (applyingTransition) throw error2;
-              if (!(error2 instanceof Error && "errcode" in error2 && typeof error2.errcode === "number" && (error2.errcode & 255) === 5)) {
-                evictOnError = true;
-                throw localStateError(directory2, error2);
-              }
-              if (performance.now() - startedAt >= 5e3) {
-                throw new Error(
-                  `Local AWS admission state stayed locked for 5 seconds in ${directory2}. Stop the process holding the transaction, or set CLOUDBURN_AWS_ADMISSION_DIR to a writable private directory shared by your workers.`,
-                  { cause: error2 }
-                );
-              }
-            } finally {
-              try {
-                if (database?.isTransaction) database.exec("ROLLBACK");
-              } finally {
-                if (handle && (evictOnError || handle.database.isTransaction)) evict(filename, handle);
-              }
-            }
-            try {
-              await (0, import_promises6.setTimeout)(10, void 0, { signal, ref: options?.ref });
-            } catch (error2) {
-              signal?.throwIfAborted();
-              throw error2;
-            }
-          }
-        },
-        close: () => {
-          for (const [filename, handle] of handles) {
-            try {
-              evict(filename, handle);
-            } catch {
-            }
-          }
-          handles.clear();
-        }
       };
     };
   }
@@ -40768,6 +40842,7 @@ var init_cost_optimization_hub = __esm({
     "use strict";
     import_client_cost_optimization_hub2 = require("@aws-sdk/client-cost-optimization-hub");
     init_src();
+    init_errors2();
     init_concurrency();
     init_client();
     init_errors();
@@ -41531,7 +41606,7 @@ var init_cost_optimization_hub = __esm({
           diagnostics: [
             {
               code: getAwsErrorCode(err),
-              details: err instanceof Error ? err.message : String(err),
+              details: toRedactedErrorMessage(err),
               message: `Skipped ${category.messageSubject} because access to AWS Cost Optimization Hub is denied by ${formatAwsAccessDeniedReason(err)}.`,
               provider: "aws",
               service: "costoptimizationhub",
@@ -41595,6 +41670,7 @@ var init_dynamodb2 = __esm({
     "use strict";
     import_client_application_auto_scaling2 = require("@aws-sdk/client-application-auto-scaling");
     import_client_dynamodb2 = require("@aws-sdk/client-dynamodb");
+    init_errors2();
     init_concurrency();
     init_client();
     init_errors();
@@ -41669,7 +41745,7 @@ var init_dynamodb2 = __esm({
               return {
                 diagnostic: {
                   code: getAwsErrorCode(err),
-                  details: err instanceof Error ? err.message : String(err),
+                  details: toRedactedErrorMessage(err),
                   message: `Skipped DynamoDB table ${table.tableName} in ${region} because access is denied by ${formatAwsAccessDeniedReason(err)}.`,
                   provider: "aws",
                   region,
@@ -44228,6 +44304,7 @@ var init_kms2 = __esm({
     "use strict";
     import_node_crypto5 = require("node:crypto");
     import_client_kms2 = require("@aws-sdk/client-kms");
+    init_errors2();
     init_concurrency();
     init_client();
     init_errors();
@@ -44246,7 +44323,7 @@ var init_kms2 = __esm({
     pluralize = (count, singular, plural = `${singular}s`) => count === 1 ? singular : plural;
     createMetadataDeniedDiagnostic = (options) => ({
       code: getAwsErrorCode(options.error),
-      details: options.error instanceof Error ? options.error.message : String(options.error),
+      details: toRedactedErrorMessage(options.error),
       message: `KMS ${options.label} metadata was unavailable for ${options.count} ${pluralize(options.count, options.subject)} in ${options.region} because access is denied by ${formatAwsAccessDeniedReason(options.error)}.`,
       provider: "aws",
       region: options.region,
@@ -45127,6 +45204,7 @@ var init_redshift2 = __esm({
   "../sdk/src/providers/aws/resources/redshift.ts"() {
     "use strict";
     import_client_redshift2 = require("@aws-sdk/client-redshift");
+    init_errors2();
     init_client();
     init_errors();
     init_execution();
@@ -45311,7 +45389,7 @@ var init_redshift2 = __esm({
         return {
           diagnostic: {
             code: getAwsErrorCode(err),
-            details: err instanceof Error ? err.message : String(err),
+            details: toRedactedErrorMessage(err),
             message: buildRedshiftScheduleAccessDeniedMessage(region, err),
             provider: "aws",
             region,
@@ -45920,6 +45998,7 @@ var init_savings_plans_coverage2 = __esm({
   "../sdk/src/providers/aws/resources/savings-plans-coverage.ts"() {
     "use strict";
     import_client_cost_explorer4 = require("@aws-sdk/client-cost-explorer");
+    init_errors2();
     init_client();
     init_errors();
     init_execution();
@@ -46023,7 +46102,7 @@ var init_savings_plans_coverage2 = __esm({
             diagnostics: [
               {
                 code: "DataUnavailableException",
-                details: err instanceof Error ? err.message : String(err),
+                details: toRedactedErrorMessage(err),
                 message: "Skipped SageMaker Savings Plans coverage because AWS Cost Explorer data is unavailable.",
                 provider: "aws",
                 service: "sagemaker",
@@ -46042,7 +46121,7 @@ var init_savings_plans_coverage2 = __esm({
           diagnostics: [
             {
               code: getAwsErrorCode(err),
-              details: err instanceof Error ? err.message : String(err),
+              details: toRedactedErrorMessage(err),
               message: `Skipped SageMaker Savings Plans coverage because access to AWS Cost Explorer is denied by ${formatAwsAccessDeniedReason(err)}.`,
               provider: "aws",
               service: "sagemaker",
@@ -47733,6 +47812,7 @@ var init_resource_explorer = __esm({
     "use strict";
     import_client_resource_explorer_22 = require("@aws-sdk/client-resource-explorer-2");
     init_debug();
+    init_errors2();
     init_concurrency();
     init_client();
     init_errors();
@@ -47768,7 +47848,7 @@ var init_resource_explorer = __esm({
       if (!(err instanceof Error)) {
         return fallback;
       }
-      return err.message.trim() || fallback;
+      return toRedactedErrorMessage(err) || fallback;
     };
     isResourceNotFoundError = (err) => {
       if (!(err instanceof Error)) {
@@ -48697,6 +48777,7 @@ var init_discovery = __esm({
     "use strict";
     init_src();
     init_debug();
+    init_errors2();
     init_concurrency();
     init_capabilities2();
     init_client();
@@ -48819,7 +48900,7 @@ var init_discovery = __esm({
     buildAccessDeniedDiagnosticMessage = (service3, region, err) => `Skipped ${service3} discovery in ${region} because access is denied by ${formatAwsAccessDeniedReason(err)}.`;
     buildDatasetFailureDiagnostic = (service3, region, err) => ({
       code: getAwsErrorCode(err),
-      details: err instanceof Error ? err.message : String(err),
+      details: toRedactedErrorMessage(err),
       message: isAwsThrottlingError(err) ? `Skipped ${service3} discovery${region ? ` in ${region}` : ""} because AWS throttled the required dataset after retrying.` : `Skipped ${service3} discovery${region ? ` in ${region}` : ""} because a required dataset failed to load.`,
       provider: "aws",
       ...region ? { region } : {},
@@ -48829,10 +48910,10 @@ var init_discovery = __esm({
     });
     buildCatalogFailureDiagnostic = (err) => {
       const status = isAwsAccessDeniedError(err) ? "access_denied" : isAwsThrottlingError(err) ? "throttled" : "error";
-      const message3 = status === "access_denied" ? `Skipped catalog-backed discovery because access to the Resource Explorer catalog is denied by ${formatAwsAccessDeniedReason(err)}; only account-scoped datasets were evaluated.` : status === "throttled" ? "Skipped catalog-backed discovery because AWS throttled the Resource Explorer catalog after retrying; only account-scoped datasets were evaluated." : err instanceof AwsDiscoveryError ? `${err.message} Only account-scoped datasets were evaluated.` : "Skipped catalog-backed discovery because the Resource Explorer catalog failed to load; only account-scoped datasets were evaluated.";
+      const message3 = status === "access_denied" ? `Skipped catalog-backed discovery because access to the Resource Explorer catalog is denied by ${formatAwsAccessDeniedReason(err)}; only account-scoped datasets were evaluated.` : status === "throttled" ? "Skipped catalog-backed discovery because AWS throttled the Resource Explorer catalog after retrying; only account-scoped datasets were evaluated." : err instanceof AwsDiscoveryError ? `${toRedactedErrorMessage(err)} Only account-scoped datasets were evaluated.` : "Skipped catalog-backed discovery because the Resource Explorer catalog failed to load; only account-scoped datasets were evaluated.";
       return {
         code: getAwsErrorCode(err),
-        details: err instanceof Error ? err.message : String(err),
+        details: toRedactedErrorMessage(err),
         message: message3,
         provider: "aws",
         service: "resource-explorer",
@@ -48938,7 +49019,7 @@ var init_discovery = __esm({
             }
             emitDebugLog(
               options?.debugLogger,
-              `aws: catalog build failed, degrading to account-scoped datasets: ${err instanceof Error ? err.message : String(err)}`
+              `aws: catalog build failed, degrading to account-scoped datasets: ${toRedactedErrorMessage(err)}`
             );
             catalogFailureDiagnostic = buildCatalogFailureDiagnostic(err);
             catalog = accountCatalog;
@@ -49166,7 +49247,7 @@ var init_discovery = __esm({
             throwIfAwsExecutionAborted();
             emitDebugLog(
               options?.debugLogger,
-              `aws: dataset ${datasetKey} failed${region ? ` in ${region}` : ""} after ${formatElapsedMs(startedAtMs)}: ${err instanceof Error ? err.message : String(err)}`
+              `aws: dataset ${datasetKey} failed${region ? ` in ${region}` : ""} after ${formatElapsedMs(startedAtMs)}: ${toRedactedErrorMessage(err)}`
             );
             if (err instanceof UnavailableDiscoveryDatasetError) {
               load = result([], [], true, err.diagnostics);
@@ -49176,7 +49257,7 @@ var init_discovery = __esm({
                 [
                   {
                     code: getAwsErrorCode(err),
-                    details: err instanceof Error ? err.message : String(err),
+                    details: toRedactedErrorMessage(err),
                     message: buildAccessDeniedDiagnosticMessage(definition.service, region, err),
                     provider: "aws",
                     region,
@@ -54629,40 +54710,8 @@ var validateConfig = (config) => ({
   iac: validateModeConfig("iac", config.iac)
 });
 
-// ../sdk/src/errors.ts
-init_errors();
-var redactErrorMessage = (message3) => message3.replace(/169\.254\.169\.254/g, "[redacted-host]").replace(/fd00:ec2::254/gi, "[redacted-host]").replace(/(https?:\/\/)([^/\s:@]+):([^/\s@]+)@/gi, "$1[redacted-auth]@").replace(
-  /([?&](?:access_token|authorization|token|x-amz-security-token|x-amz-signature|signature)=)[^&\s]+/gi,
-  "$1[redacted]"
-).replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, "$1[redacted]");
-var categorizeError = (err) => {
-  if (!(err instanceof Error)) {
-    return { code: "RUNTIME_ERROR", message: "An unexpected error occurred." };
-  }
-  const code = "code" in err && typeof err.code === "string" ? err.code : void 0;
-  const message3 = redactErrorMessage(err.message).trim();
-  if (err.name === "CredentialsProviderError" || err.name === "ExpiredTokenException" || code === "CredentialsProviderError" || code === "ExpiredTokenException") {
-    return {
-      code: "CREDENTIALS_ERROR",
-      message: "AWS credentials not found or expired. Run 'aws sts get-caller-identity' to verify your session."
-    };
-  }
-  if (err.name.includes("AccessDenied") || code?.includes("AccessDenied") === true) {
-    return {
-      code: "ACCESS_DENIED",
-      message: message3 || "Insufficient AWS permissions. Check your IAM role or policy."
-    };
-  }
-  if (code === "ENOENT") {
-    return { code: "PATH_NOT_FOUND", message: `Path not found: ${err.path ?? "unknown"}` };
-  }
-  if (code !== void 0 && isAwsDiscoveryErrorCode(code)) {
-    return { code, message: message3 || "AWS Resource Explorer discovery failed." };
-  }
-  return { code: "RUNTIME_ERROR", message: message3 || "An unexpected error occurred." };
-};
-
 // ../sdk/src/index.ts
+init_errors2();
 init_evidence_cache();
 
 // ../sdk/src/findings.ts
@@ -54747,6 +54796,7 @@ var parseIaCFiles = async (root, parsers) => {
 };
 
 // ../sdk/src/parsers/result.ts
+var MAX_IAC_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 var createEmptyIaCParseResult = () => ({ diagnostics: [], resources: [] });
 var createSkippedIaCParseResult = (diagnostic) => ({
   diagnostics: [
@@ -54776,8 +54826,7 @@ var scanTerraformLine = (line, state) => {
   }
   const comments = [];
   let braceDelta = 0;
-  let quote;
-  let escaped = false;
+  const frames = [];
   for (let index = 0; index < line.length; index += 1) {
     const character = line[index];
     const nextCharacter = line[index + 1];
@@ -54794,18 +54843,54 @@ var scanTerraformLine = (line, state) => {
       index = endIndex + 1;
       continue;
     }
-    if (quote) {
-      if (escaped) {
-        escaped = false;
-      } else if (character === "\\" && quote === '"') {
-        escaped = true;
-      } else if (character === quote) {
-        quote = void 0;
+    const frame = frames.at(-1);
+    if (frame?.kind === "string") {
+      if (character === "\\") {
+        index += 1;
+      } else if (character === "$" && nextCharacter === "$" && line[index + 2] === "{" || character === "%" && nextCharacter === "%" && line[index + 2] === "{") {
+        index += 2;
+      } else if ((character === "$" || character === "%") && nextCharacter === "{") {
+        frames.push({ kind: "interp", depth: 0 });
+        index += 1;
+      } else if (character === '"') {
+        frames.pop();
       }
       continue;
     }
-    if (character === '"' || character === "'") {
-      quote = character;
+    if (frame?.kind === "single") {
+      if (character === "'") {
+        frames.pop();
+      }
+      continue;
+    }
+    if (frame?.kind === "interp") {
+      if (character === "/" && nextCharacter === "*") {
+        const endIndex = line.indexOf("*/", index + 2);
+        if (endIndex === -1) {
+          break;
+        }
+        index = endIndex + 1;
+      } else if (character === "#" || character === "/" && nextCharacter === "/") {
+        break;
+      } else if (character === '"') {
+        frames.push({ kind: "string" });
+      } else if (character === "{") {
+        frame.depth += 1;
+      } else if (character === "}") {
+        if (frame.depth === 0) {
+          frames.pop();
+        } else {
+          frame.depth -= 1;
+        }
+      }
+      continue;
+    }
+    if (character === '"') {
+      frames.push({ kind: "string" });
+      continue;
+    }
+    if (character === "'") {
+      frames.push({ kind: "single" });
       continue;
     }
     if (character === "#" || character === "/" && nextCharacter === "/") {
@@ -54846,10 +54931,42 @@ var scanTerraformLine = (line, state) => {
 };
 
 // ../sdk/src/parsers/suppressions.ts
-var YAML_NODE_PROPERTY_PREFIX = /^(?:-\s+)?(?:(?:![^\s]+|&[^\s]+)\s*)*$/u;
+var YAML_FLOW_BOUNDARY_CHARACTERS = ":,[{?";
+var createYamlNodePrefixState = (dashAllowed) => ({
+  dashAllowed,
+  propertySeen: false,
+  token: "none",
+  valid: true
+});
+var isWhitespace = (character) => character !== void 0 && /\s/u.test(character);
+var advanceYamlNodePrefix = (state, character) => {
+  if (YAML_FLOW_BOUNDARY_CHARACTERS.includes(character)) {
+    Object.assign(state, createYamlNodePrefixState(false));
+    return;
+  }
+  if (isWhitespace(character)) {
+    state.token = "none";
+    return;
+  }
+  if (!state.valid) {
+    return;
+  }
+  if (state.token === "none") {
+    if (character === "!" || character === "&") {
+      state.token = "property";
+      state.propertySeen = true;
+    } else if (character === "-" && state.dashAllowed && !state.propertySeen) {
+      state.token = "dash";
+    } else {
+      state.valid = false;
+    }
+  } else if (state.token === "dash") {
+    state.valid = false;
+  }
+};
 var parseSuppression = (text, location) => {
   const normalized = text.replace(/\*\/\s*$/u, "").trim();
-  const ignoreAllMatch = /(?:^|\s)cloudburn-ignore-all(?:\s+(.+))?$/u.exec(normalized);
+  const ignoreAllMatch = /(?:^|\s)cloudburn-ignore-all(?:\s([\s\S]*))?$/u.exec(normalized);
   if (ignoreAllMatch) {
     const reason2 = ignoreAllMatch[1]?.trim();
     return {
@@ -54858,7 +54975,7 @@ var parseSuppression = (text, location) => {
       ...reason2 ? { reason: reason2 } : {}
     };
   }
-  const ignoreRuleMatch = /(?:^|\s)cloudburn-ignore\s+(\S+)(?:\s+(.+))?$/u.exec(normalized);
+  const ignoreRuleMatch = /(?:^|\s)cloudburn-ignore\s+(\S+)(?:\s([\s\S]*))?$/u.exec(normalized);
   if (!ignoreRuleMatch?.[1]) {
     return void 0;
   }
@@ -54871,8 +54988,13 @@ var parseSuppression = (text, location) => {
   };
 };
 var findYamlLineCommentStart = (line, state) => {
+  const nodePrefix = createYamlNodePrefixState(true);
   let escaped = false;
+  let advancedTo = 0;
   for (let index = 0; index < line.length; index += 1) {
+    for (; advancedTo < index; advancedTo += 1) {
+      advanceYamlNodePrefix(nodePrefix, line[advancedTo] ?? "");
+    }
     const character = line[index];
     if (state.quote === '"') {
       if (escaped) {
@@ -54892,34 +55014,18 @@ var findYamlLineCommentStart = (line, state) => {
       }
       continue;
     }
-    if ((character === '"' || character === "'") && isYamlQuotedScalarStart(line, index)) {
+    const previous = line[index - 1];
+    if ((character === '"' || character === "'") && isYamlQuotedScalarStart(previous, nodePrefix)) {
       state.quote = character;
       continue;
     }
-    const previous = line[index - 1];
-    if (character === "#" && (index === 0 || /\s/u.test(previous ?? ""))) {
+    if (character === "#" && (previous === void 0 || isWhitespace(previous))) {
       return index;
     }
   }
   return void 0;
 };
-function isYamlQuotedScalarStart(line, quoteIndex) {
-  const prefix = line.slice(0, quoteIndex);
-  const previousCharacter = prefix.at(-1);
-  if (previousCharacter !== void 0 && !/\s/u.test(previousCharacter)) {
-    return ":,[{?".includes(previousCharacter);
-  }
-  const trimmedPrefix = prefix.trimEnd();
-  const boundaryIndex = Math.max(
-    trimmedPrefix.lastIndexOf(":"),
-    trimmedPrefix.lastIndexOf(","),
-    trimmedPrefix.lastIndexOf("["),
-    trimmedPrefix.lastIndexOf("{"),
-    trimmedPrefix.lastIndexOf("?")
-  );
-  const nodePrefix = trimmedPrefix.slice(boundaryIndex + 1).trimStart();
-  return YAML_NODE_PROPERTY_PREFIX.test(nodePrefix);
-}
+var isYamlQuotedScalarStart = (previousCharacter, nodePrefix) => previousCharacter === void 0 || isWhitespace(previousCharacter) ? nodePrefix.valid : YAML_FLOW_BOUNDARY_CHARACTERS.includes(previousCharacter);
 var toYamlCommentSegments = (line, state) => {
   const commentStart = findYamlLineCommentStart(line, state);
   return commentStart === void 0 ? [] : [{ column: commentStart + 1, text: line.slice(commentStart + 1) }];
@@ -54946,11 +55052,34 @@ var extractSuppressionComments = (contents, path, syntax, excludedLines = /* @__
   }
   return comments;
 };
-var findResourceSuppressions = (comments, startLine, endLine) => comments.filter(({ line }) => line === startLine - 1 || line >= startLine && line <= endLine).map(({ suppression }) => suppression);
+var findResourceSuppressions = (comments, startLine, endLine) => {
+  const firstRelevantLine = startLine - 1;
+  let lowerBound = 0;
+  let upperBound = comments.length;
+  while (lowerBound < upperBound) {
+    const middle = Math.floor((lowerBound + upperBound) / 2);
+    const middleLine = comments[middle]?.line ?? Number.POSITIVE_INFINITY;
+    if (middleLine < firstRelevantLine) {
+      lowerBound = middle + 1;
+    } else {
+      upperBound = middle;
+    }
+  }
+  const suppressions = [];
+  for (let index = lowerBound; index < comments.length; index += 1) {
+    const comment = comments[index];
+    if (!comment || comment.line > endLine) {
+      break;
+    }
+    if (comment.line === firstRelevantLine || comment.line >= startLine && comment.line <= endLine) {
+      suppressions.push(comment.suppression);
+    }
+  }
+  return suppressions;
+};
 
 // ../sdk/src/parsers/cloudformation.ts
 var SUPPORTED_EXTENSIONS = /* @__PURE__ */ new Set([".json", ".yaml", ".yml"]);
-var MAX_TEMPLATE_SIZE_BYTES = 5 * 1024 * 1024;
 var INTRINSIC_TAG_NAMES = {
   "!And": "Fn::And",
   "!Base64": "Fn::Base64",
@@ -55093,10 +55222,10 @@ var toIaCResources = async (path, relativePath) => {
     return createEmptyIaCParseResult();
   }
   const pathStats = await (0, import_promises3.stat)(path);
-  if (pathStats.size > MAX_TEMPLATE_SIZE_BYTES) {
+  if (pathStats.size > MAX_IAC_FILE_SIZE_BYTES) {
     return createSkippedIaCParseResult({
       code: "CLOUDFORMATION_TEMPLATE_TOO_LARGE",
-      details: `Template size ${pathStats.size} bytes exceeds the ${MAX_TEMPLATE_SIZE_BYTES}-byte limit.`,
+      details: `Template size ${pathStats.size} bytes exceeds the ${MAX_IAC_FILE_SIZE_BYTES}-byte limit.`,
       message: `Skipped CloudFormation file ${relativePath} because it exceeds the 5 MiB size limit.`,
       service: "cloudformation"
     });
@@ -55176,60 +55305,57 @@ var locateResourceBlocks = (contents, path) => {
   const lines = contents.split(/\r?\n/u);
   const locations = /* @__PURE__ */ new Map();
   const suppressionComments = extractSuppressionComments(contents, path, "terraform");
+  const lexerState = createTerraformLexerState();
+  let depth = 0;
+  let openBlock;
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    if (line === void 0) {
-      continue;
-    }
-    const blockMatch = /^(\s*)resource\s+"([^"]+)"\s+"([^"]+)"\s*\{/u.exec(line);
-    if (!blockMatch) {
-      continue;
-    }
-    const leadingWhitespace = blockMatch[1] ?? "";
-    const resourceType = blockMatch[2];
-    const resourceName = blockMatch[3];
-    if (!resourceType || !resourceName) {
-      continue;
-    }
-    const blockLocation = {
-      path,
-      line: lineIndex + 1,
-      column: leadingWhitespace.length + 1
-    };
-    const attributeLocations = {};
-    const lexerState = createTerraformLexerState();
-    let depth = scanTerraformLine(line, lexerState).braceDelta;
-    let blockEndLine = lineIndex + 1;
-    for (let blockLineIndex = lineIndex + 1; blockLineIndex < lines.length && depth > 0; blockLineIndex += 1) {
-      const blockLine = lines[blockLineIndex];
-      if (blockLine === void 0) {
-        continue;
+    const line = lines[lineIndex] ?? "";
+    const scan = scanTerraformLine(line, lexerState);
+    if (!openBlock && depth === 0 && !scan.isLiteralLine) {
+      const blockMatch = /^(\s*)resource\s+"([^"]+)"\s+"([^"]+)"\s*\{/u.exec(line);
+      if (blockMatch?.[2] && blockMatch[3]) {
+        const leadingWhitespace = blockMatch[1] ?? "";
+        openBlock = {
+          resourceType: blockMatch[2],
+          resourceName: blockMatch[3],
+          blockLocation: {
+            path,
+            line: lineIndex + 1,
+            column: leadingWhitespace.length + 1
+          },
+          attributeLocations: {},
+          startLine: lineIndex + 1
+        };
       }
-      const lineScan = scanTerraformLine(blockLine, lexerState);
-      if (depth === 1 && !lineScan.isLiteralLine) {
-        const attributeMatch = /^(\s*)([A-Za-z0-9_]+)\s*=/u.exec(blockLine);
-        if (attributeMatch) {
-          const attributeLeadingWhitespace = attributeMatch[1] ?? "";
-          const attributeName = attributeMatch[2];
-          if (attributeName && !attributeLocations[attributeName]) {
-            attributeLocations[attributeName] = {
-              path,
-              line: blockLineIndex + 1,
-              column: attributeLeadingWhitespace.length + 1
-            };
-          }
+    } else if (openBlock && lineIndex + 1 !== openBlock.startLine && depth === 1 && !scan.isLiteralLine) {
+      const attributeMatch = /^(\s*)([A-Za-z0-9_]+)\s*=/u.exec(line);
+      if (attributeMatch?.[2]) {
+        const attributeLeadingWhitespace = attributeMatch[1] ?? "";
+        const attributeName = attributeMatch[2];
+        if (!openBlock.attributeLocations[attributeName]) {
+          openBlock.attributeLocations[attributeName] = {
+            path,
+            line: lineIndex + 1,
+            column: attributeLeadingWhitespace.length + 1
+          };
         }
       }
-      depth += lineScan.braceDelta;
-      if (depth === 0) {
-        blockEndLine = blockLineIndex + 1;
-        lineIndex = blockLineIndex;
-      }
     }
-    locations.set(toResourceLocationKey(resourceType, resourceName), {
-      blockLocation,
-      attributeLocations,
-      suppressions: findResourceSuppressions(suppressionComments, blockLocation.line, blockEndLine)
+    depth = Math.max(0, depth + scan.braceDelta);
+    if (openBlock && depth === 0) {
+      locations.set(toResourceLocationKey(openBlock.resourceType, openBlock.resourceName), {
+        blockLocation: openBlock.blockLocation,
+        attributeLocations: openBlock.attributeLocations,
+        suppressions: findResourceSuppressions(suppressionComments, openBlock.startLine, lineIndex + 1)
+      });
+      openBlock = void 0;
+    }
+  }
+  if (openBlock) {
+    locations.set(toResourceLocationKey(openBlock.resourceType, openBlock.resourceName), {
+      blockLocation: openBlock.blockLocation,
+      attributeLocations: openBlock.attributeLocations,
+      suppressions: findResourceSuppressions(suppressionComments, openBlock.startLine, openBlock.startLine)
     });
   }
   return locations;
@@ -55237,6 +55363,15 @@ var locateResourceBlocks = (contents, path) => {
 var toIaCResources2 = async (path, relativePath) => {
   if ((0, import_node_path4.extname)(path) !== ".tf") {
     return createEmptyIaCParseResult();
+  }
+  const pathStats = await (0, import_promises4.stat)(path);
+  if (pathStats.size > MAX_IAC_FILE_SIZE_BYTES) {
+    return createSkippedIaCParseResult({
+      code: "TERRAFORM_FILE_TOO_LARGE",
+      details: `File size ${pathStats.size} bytes exceeds the ${MAX_IAC_FILE_SIZE_BYTES}-byte limit.`,
+      message: `Skipped Terraform file ${relativePath} because it exceeds the 5 MiB size limit.`,
+      service: "terraform"
+    });
   }
   const contents = await (0, import_promises4.readFile)(path, "utf8");
   let parsed;
@@ -55340,10 +55475,11 @@ var resolveScanPolicy = (result, controls) => {
 init_credentials();
 init_errors();
 init_regions();
+init_request_store();
 
 // ../sdk/src/config/loader.ts
-var import_promises5 = require("node:fs/promises");
-var import_node_path5 = require("node:path");
+var import_promises6 = require("node:fs/promises");
+var import_node_path6 = require("node:path");
 var import_yaml2 = __toESM(require_dist(), 1);
 
 // ../sdk/src/config/defaults.ts
@@ -55372,7 +55508,7 @@ var MODE_KEYS = /* @__PURE__ */ new Set(["disabled-rules", "enabled-rules", "fai
 var isRecord2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var fileExists = async (path) => {
   try {
-    await (0, import_promises5.access)(path);
+    await (0, import_promises6.access)(path);
     return true;
   } catch {
     return false;
@@ -55443,7 +55579,7 @@ var normalizeConfig = (value) => {
 var ensureSingleConfigFile = async (directory) => {
   const configPaths = await Promise.all(
     CLOUDBURN_YAML_FILENAMES.map(async (filename) => {
-      const path = (0, import_node_path5.join)(directory, filename);
+      const path = (0, import_node_path6.join)(directory, filename);
       return await fileExists(path) ? path : void 0;
     })
   );
@@ -55453,25 +55589,34 @@ var ensureSingleConfigFile = async (directory) => {
   }
   return existingPaths[0];
 };
-var isGitRoot = async (directory) => fileExists((0, import_node_path5.join)(directory, ".git"));
+var isGitRoot = async (directory) => fileExists((0, import_node_path6.join)(directory, ".git"));
 var findConfigPath = async (startDirectory) => {
-  let currentDirectory = (0, import_node_path5.resolve)(startDirectory);
+  let currentDirectory = (0, import_node_path6.resolve)(startDirectory);
   while (true) {
     const configPath = await ensureSingleConfigFile(currentDirectory);
     if (configPath) {
       return configPath;
     }
-    const parentDirectory = (0, import_node_path5.dirname)(currentDirectory);
+    const parentDirectory = (0, import_node_path6.dirname)(currentDirectory);
     if (await isGitRoot(currentDirectory) || parentDirectory === currentDirectory) {
       return void 0;
     }
     currentDirectory = parentDirectory;
   }
 };
+var formatParseError = (error2, lineCounter) => {
+  const offset = error2.pos[0];
+  if (offset === -1) {
+    return `Invalid YAML in CloudBurn config file: ${error2.code}`;
+  }
+  const { line, col } = lineCounter.linePos(offset);
+  return `Invalid YAML in CloudBurn config file: ${error2.code} at line ${line}, column ${col}`;
+};
 var parseConfigFile = async (path) => {
-  const document = (0, import_yaml2.parseDocument)(await (0, import_promises5.readFile)(path, "utf8"));
+  const lineCounter = new import_yaml2.LineCounter();
+  const document = (0, import_yaml2.parseDocument)(await (0, import_promises6.readFile)(path, "utf8"), { lineCounter, prettyErrors: false });
   if (document.errors.length > 0) {
-    throw new Error(document.errors.map((error2) => error2.message).join("\n"));
+    throw new Error(document.errors.map((error2) => formatParseError(error2, lineCounter)).join("\n"));
   }
   return normalizeConfig(document.toJS());
 };
@@ -55480,14 +55625,14 @@ var isCiEnvironment = () => {
   return ci !== void 0 && ci !== "" && ci.toLowerCase() !== "false" && ci !== "0";
 };
 var loadConfig = async (path) => {
-  const resolvedPath = path ? (0, import_node_path5.resolve)(path) : isCiEnvironment() ? void 0 : await findConfigPath(process.cwd());
+  const resolvedPath = path ? (0, import_node_path6.resolve)(path) : isCiEnvironment() ? void 0 : await findConfigPath(process.cwd());
   if (resolvedPath === void 0) {
     return mergeConfig();
   }
   if (!await fileExists(resolvedPath)) {
     throw new Error(`CloudBurn config file not found: ${resolvedPath}`);
   }
-  await ensureSingleConfigFile((0, import_node_path5.dirname)(resolvedPath));
+  await ensureSingleConfigFile((0, import_node_path6.dirname)(resolvedPath));
   return mergeConfig(await parseConfigFile(resolvedPath));
 };
 
@@ -55495,7 +55640,7 @@ var loadConfig = async (path) => {
 init_debug();
 
 // ../sdk/src/providers/aws/static.ts
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 init_src();
 
 // ../sdk/src/providers/aws/static-registry.ts
@@ -55565,6 +55710,7 @@ var DYNAMODB_TABLE_RESOURCE_ID_PATTERN = /^table\/([^/]+)$/u;
 var isCloudFormationResource = (resource) => resource.type.startsWith("AWS::");
 var toStaticResourceId = (resource) => isCloudFormationResource(resource) ? resource.name : `${resource.type}.${resource.name}`;
 var pickLocation = (resource, attributePaths) => attributePaths.map((attributePath) => resource.attributeLocations?.[attributePath]).find((location) => Boolean(location)) ?? resource.location;
+var isAbsent = (value) => value === void 0 || value === null;
 var getLiteralNumber = (value) => typeof value === "number" ? value : null;
 var getLiteralExactString = (value) => typeof value === "string" && !value.includes("${") ? value : null;
 var getLiteralExactStringArray = (value) => {
@@ -55578,14 +55724,38 @@ var getLiteralUpperString = (value) => {
   return literal ? literal.toUpperCase() : null;
 };
 var getLiteralBoolean = (value) => typeof value === "boolean" ? value : null;
+var getLiteralBooleanish = (value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.toLowerCase();
+  return normalized === "true" ? true : normalized === "false" ? false : null;
+};
+var getStaticRedshiftHasVpc = (value) => isAbsent(value) ? false : getLiteralExactString(value) === null ? null : true;
+var getStaticRedshiftHsmEnabled = (...values) => {
+  if (values.some((value) => getLiteralExactString(value) !== null)) {
+    return true;
+  }
+  return values.some((value) => !isAbsent(value)) ? null : false;
+};
 var getLiteralStringArray = (value) => {
-  if (value === void 0) {
+  if (isAbsent(value)) {
     return ["x86_64"];
   }
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string" && !entry.includes("${"))) {
     return null;
   }
   return value.map((entry) => entry.toLowerCase());
+};
+var isCloudFormationIntrinsic = (value) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return keys.length === 1 && (keys[0] === "Ref" || keys[0]?.startsWith("Fn::") === true);
 };
 var toRecordArray2 = (value) => Array.isArray(value) ? value.filter((entry) => isRecord(entry)) : [];
 var getCloudFormationLogicalIdReference = (value) => {
@@ -55830,11 +56000,10 @@ var createTerraformEcrRepository = (repository, lifecyclePolicies) => {
 };
 var createCloudFormationEcrRepository = (repository) => {
   const properties = isRecord(repository.attributes.Properties) ? repository.attributes.Properties : void 0;
+  const lifecyclePolicy = properties?.LifecyclePolicy;
   return {
-    hasLifecyclePolicy: isRecord(properties?.LifecyclePolicy),
-    ...getEcrLifecyclePolicyTraits(
-      isRecord(properties?.LifecyclePolicy) ? properties.LifecyclePolicy.LifecyclePolicyText : void 0
-    ),
+    hasLifecyclePolicy: isAbsent(lifecyclePolicy) ? false : isRecord(lifecyclePolicy) && !isCloudFormationIntrinsic(lifecyclePolicy) ? true : null,
+    ...isRecord(lifecyclePolicy) && !isCloudFormationIntrinsic(lifecyclePolicy) ? getEcrLifecyclePolicyTraits(lifecyclePolicy.LifecyclePolicyText) : { hasTaggedImageRetentionCap: null, hasUntaggedImageExpiry: null },
     location: repository.location,
     resourceId: toStaticResourceId(repository)
   };
@@ -55929,7 +56098,7 @@ var loadStaticDynamoDbTables = (resources) => resources.flatMap((resource) => {
   if (resource.type === TERRAFORM_DYNAMODB_TABLE_TYPE) {
     return [
       {
-        billingMode: getStaticDynamoDbBillingMode(resource.attributes.billing_mode) ?? "PROVISIONED",
+        billingMode: isAbsent(resource.attributes.billing_mode) ? "PROVISIONED" : getStaticDynamoDbBillingMode(resource.attributes.billing_mode),
         location: pickLocation(resource, ["name", "billing_mode"]),
         resourceId: toStaticResourceId(resource),
         tableName: getTerraformDynamoDbTableName(resource)
@@ -55940,7 +56109,7 @@ var loadStaticDynamoDbTables = (resources) => resources.flatMap((resource) => {
     const properties = isRecord(resource.attributes.Properties) ? resource.attributes.Properties : void 0;
     return [
       {
-        billingMode: getStaticDynamoDbBillingMode(properties?.BillingMode) ?? "PROVISIONED",
+        billingMode: isAbsent(properties?.BillingMode) ? "PROVISIONED" : getStaticDynamoDbBillingMode(properties.BillingMode),
         location: pickLocation(resource, ["Properties.TableName", "Properties.BillingMode"]),
         resourceId: toStaticResourceId(resource),
         tableName: getCloudFormationDynamoDbTableName(resource)
@@ -56186,7 +56355,7 @@ var loadStaticEcsServices = (resources) => resources.flatMap((resource) => {
         clusterName: getTerraformEcsClusterName(resource.attributes.cluster),
         location: pickLocation(resource, ["cluster", "name", "scheduling_strategy"]),
         resourceId: toStaticResourceId(resource),
-        schedulingStrategy: getLiteralUpperString(resource.attributes.scheduling_strategy) ?? "REPLICA",
+        schedulingStrategy: isAbsent(resource.attributes.scheduling_strategy) ? "REPLICA" : getLiteralUpperString(resource.attributes.scheduling_strategy),
         serviceName: getLiteralExactString(resource.attributes.name)
       }
     ];
@@ -56206,7 +56375,7 @@ var loadStaticEcsServices = (resources) => resources.flatMap((resource) => {
         "Properties.SchedulingStrategy"
       ]),
       resourceId: toStaticResourceId(resource),
-      schedulingStrategy: getLiteralUpperString(properties?.SchedulingStrategy) ?? "REPLICA",
+      schedulingStrategy: isAbsent(properties?.SchedulingStrategy) ? "REPLICA" : getLiteralUpperString(properties.SchedulingStrategy),
       serviceName
     }
   ];
@@ -56316,8 +56485,14 @@ var loadStaticRedshiftClusters = (resources) => {
         automatedSnapshotRetentionPeriod: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? resource.attributes.automated_snapshot_retention_period === void 0 ? void 0 : getLiteralNumberish(resource.attributes.automated_snapshot_retention_period) : properties?.AutomatedSnapshotRetentionPeriod === void 0 ? void 0 : getLiteralNumberish(properties?.AutomatedSnapshotRetentionPeriod),
         hasPauseSchedule: schedules.hasPauseSchedule,
         hasResumeSchedule: schedules.hasResumeSchedule,
-        hasVpc: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? getLiteralExactString(resource.attributes.cluster_subnet_group_name) !== null : getLiteralExactString(properties?.ClusterSubnetGroupName) !== null,
-        hsmEnabled: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? getLiteralExactString(resource.attributes.hsm_client_certificate_identifier) !== null || getLiteralExactString(resource.attributes.hsm_configuration_identifier) !== null : getLiteralExactString(properties?.HsmClientCertificateIdentifier) !== null || getLiteralExactString(properties?.HsmConfigurationIdentifier) !== null,
+        hasVpc: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? getStaticRedshiftHasVpc(resource.attributes.cluster_subnet_group_name) : getStaticRedshiftHasVpc(properties?.ClusterSubnetGroupName),
+        hsmEnabled: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? getStaticRedshiftHsmEnabled(
+          resource.attributes.hsm_client_certificate_identifier,
+          resource.attributes.hsm_configuration_identifier
+        ) : getStaticRedshiftHsmEnabled(
+          properties?.HsmClientCertificateIdentifier,
+          properties?.HsmConfigurationIdentifier
+        ),
         location: pickLocation(resource, [
           "cluster_identifier",
           "cluster_subnet_group_name",
@@ -56328,7 +56503,7 @@ var loadStaticRedshiftClusters = (resources) => {
           "Properties.MultiAZ",
           "Properties.AutomatedSnapshotRetentionPeriod"
         ]),
-        multiAz: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? getLiteralBoolean(resource.attributes.multi_az) : getLiteralBoolean(properties?.MultiAZ),
+        multiAz: resource.type === TERRAFORM_REDSHIFT_CLUSTER_TYPE ? isAbsent(resource.attributes.multi_az) ? false : getLiteralBooleanish(resource.attributes.multi_az) : isAbsent(properties?.MultiAZ) ? false : getLiteralBooleanish(properties.MultiAZ),
         resourceId: toStaticResourceId(resource)
       }
     ];
@@ -56595,7 +56770,7 @@ var loadAwsStaticResources = async (path, rules) => {
   const resourcesByScope = /* @__PURE__ */ new Map();
   for (const resource of iacResources) {
     const sourcePath = resource.location?.path;
-    const scope = sourcePath ? resource.type.startsWith("AWS::") ? `cloudformation:${sourcePath}` : `terraform:${(0, import_node_path6.dirname)(sourcePath)}` : "";
+    const scope = sourcePath ? resource.type.startsWith("AWS::") ? `cloudformation:${sourcePath}` : `terraform:${(0, import_node_path7.dirname)(sourcePath)}` : "";
     const scopedResources = resourcesByScope.get(scope) ?? [];
     scopedResources.push(resource);
     resourcesByScope.set(scope, scopedResources);
@@ -57000,9 +57175,9 @@ var getInputs = () => {
 };
 
 // src/version.ts
-var ACTION_VERSION = "1.0.5";
-var SDK_VERSION = "0.38.1";
-var RULES_VERSION = "0.35.1";
+var ACTION_VERSION = "1.0.6";
+var SDK_VERSION = "0.38.2";
+var RULES_VERSION = "0.35.2";
 
 // src/markdown.ts
 var escapeCell = (value) => value.replace(/\\/g, "\\\\").replace(/[[\]<>|]/g, "\\$&").replace(/\r\n?|\n/g, " ");
